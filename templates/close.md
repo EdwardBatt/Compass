@@ -26,6 +26,8 @@ When you do write one, carry the session's **trajectory** — the block the star
 
 **The trajectory never justifies a session note.** If rule 6 says no note, there is no note; report the trajectory in the session and let it go.
 
+**7. The config** (`compass.config.json`) — did this session create a plan, a roadmap, a folder of decision records or a schema that `paths` does not name? Add it and run `compass sync`, so every procedure and every tool starts using it. The lint names likely candidates it finds; it never wires them in by itself. Set a path to `false` when the project deliberately has none.
+
 ## Rules while writing
 
 - **Update in place.** A new file needs a reason.

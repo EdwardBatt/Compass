@@ -1,23 +1,56 @@
 # Compass
 
-Shared, agent-independent orientation for AI coding tools. Compass is a small Markdown store in your repository that routes a task to the right context, plus a lint that catches when that store has rotted. Claude Code, Cursor, Gemini, Antigravity and anything that reads `AGENTS.md` all use the same store.
+**Shared project memory for AI coding agents, with a lint that keeps it honest.**
+
+AI coding agents start every session knowing nothing about your project. They either read too much (slow, expensive, distracted) or too little (confident and wrong). Notes written to help them go stale silently, and each tool keeps its own copy of the rules.
+
+Compass fixes that with three things:
+
+1. **A tiered Markdown store in your repository** that sends each task to *one* short note and the source files that matter, instead of the whole codebase.
+2. **Two routines**, *start* and *close*, that every agent follows: orient before work, and write back only what will still be true next quarter.
+3. **A lint that treats memory rot as a build failure**: dead paths, notes that have grown into copies of the code, a plan that moved while the status file didn't, generated rules edited by hand.
+
+One `compass.config.json` generates the instructions for **Claude Code, Cursor, Gemini, Antigravity and anything that reads `AGENTS.md`**, so every tool works from the same memory.
 
 No database, no plugin, no dependencies: Node 18.17+ and git.
 
-## Quick start
-
-```bash
-npx --yes github:EdwardBatt/Compass init --project "My App" --owner "Sam" --tools claude,cursor,gemini,antigravity,agents
+```
+ task ──► MAP.md ──► one capsule ──► the source files ──► work ──► close ──► lint
+            │            (≤ 60 lines)        (they win)               │
+            └── STATE.md · traps.md index ◄────────── only what is durable
 ```
 
-This creates:
+## Quick start
 
-- `compass.config.json` — yours; everything project-specific lives here
-- `docs/compass/` — the store: `README.md`, `MAP.md`, `STATE.md`, `traps.md`, `capsules/`, `sessions/`, `archive/`
-- `docs/compass/protocol/start.md` and `close.md` — the procedures (generated)
-- one pointer per tool: a `compass:begin … compass:end` block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and the Antigravity rules, `.cursor/rules/compass.mdc`, and `/compass-start` and `/compass-close` for Claude Code (generated)
+In any repository, new or old:
 
-Then fill in `paths` in the config, run `compass sync`, and write the store README's first paragraph.
+```bash
+npx --yes github:EdwardBatt/Compass init --tools claude,cursor,gemini,antigravity,agents --ci --hook
+```
+
+`init`:
+
+- writes `compass.config.json`. It takes the owner from `git config user.name` and pre-fills `paths` with any plan, roadmap, decision-record folder or schema it finds under common names;
+- creates the store in `docs/compass/`;
+- generates every tool's instructions;
+- with `--ci`, adds a GitHub Actions workflow; with `--hook`, adds a pre-commit hook;
+- ends with numbered next steps.
+
+Add `--project "Name"` and `--owner "Name"` to override what it guesses.
+
+## Your first week
+
+| When | What you do | What Compass does |
+|---|---|---|
+| **Day 0** | Run `init`. Replace the placeholder paragraph in `docs/compass/README.md` with three or four sentences about the project | The lint warns until the placeholder is gone |
+| **Day 1** | Write a plan: a short list of milestones in any Markdown file. Set `paths.plan` (the lint suggests it if the file has a common name) and run `compass sync` | `/compass-start` with no task now proposes work from the plan. Until then, it explains that no plan is configured and what to do first |
+| **First task** | `/compass-start add login` | The map is empty, so it reports *no row matched* and records that in its trajectory block. Compass is designed to fill itself from the tasks it could not route |
+| **End of that session** | `/compass-close` | Adds a MAP row for login, moves login into STATE's *Working* section, ticks the plan. Adds a trap only if something cost real time and its cause was hidden |
+| **First real decision** | — | Close drafts a decision record and stops for you to accept it. When the folder exists, the lint suggests setting `paths.adr`. After `sync`, every procedure checks decisions |
+| **A domain gets complicated** | — | Close writes the first capsule: at most 60 lines, pointing at source rather than copying it. MAP routes to it with a one-sentence abstract the lint keeps identical |
+| **Every commit** | — | The hook and CI fail on anything provably wrong. Warnings flag what is merely aging |
+
+Most sessions write nothing. That is the intended outcome: a store that fills with notes nobody needed is the failure Compass exists to prevent.
 
 ## Daily use
 
@@ -26,62 +59,70 @@ The CLI sets Compass up. Day to day, two routines do the work, one at each end o
 | When | Claude Code | Other tools | What happens |
 |---|---|---|---|
 | Before work | `/compass-start <task>` | follow `docs/compass/protocol/start.md` | Reads the map, one capsule and the source it names, then reports what it loaded, the decisions and traps that apply, and anything waiting on a person. Ends with a trajectory block recording the context it was given |
-| Not sure what to do next | `/compass-start` (no task) | same file, no task | Proposes a short, ranked list from STATE, the newest session note, git and the plan. Then waits for you to pick |
-| After work | `/compass-close` | follow `docs/compass/protocol/close.md` | Writes back only what is durable: a trap, a state change, a capsule edit or a missing map row. Drafts decision records instead of putting decisions in notes. Runs the lint. **Most sessions write nothing** |
+| Not sure what to do next | `/compass-start` (no task) | same file, no task | Proposes a short, ranked list from STATE, the newest session note, git and the plan, then waits for you to pick. On an empty project, says what to do first |
+| After work | `/compass-close` | follow `docs/compass/protocol/close.md` | Writes back only what is durable: a trap, a state change, a capsule edit, a missing map row, a new path in the config. Drafts decision records instead of putting decisions in notes. Runs the lint. **Most sessions write nothing** |
 | Before every commit | `compass lint` (or your `lintCommand`) | same | Fails on anything provably wrong in the store |
 
-Cursor, Gemini, Antigravity and `AGENTS.md` readers are pointed at the two protocol files by their generated rules, so you can just ask them to "start Compass for <task>" or "close Compass".
-
-## Commands
-
-| Command | Does |
-|---|---|
-| `compass init` | Writes the config and store if they are missing, then syncs |
-| `compass sync` | Regenerates every tool's files from the config. `--check` only reports drift |
-| `compass lint` | Rot detection. Exits 1 on any error |
-| `compass doctor` | Shows the root, config, every generated file's status, hook and CI |
-| `compass hook` | Installs a git pre-commit hook that runs the lint |
-
-All of them accept `--root <dir>`. Otherwise the root is the nearest folder holding `compass.config.json`, or else the git top level, so they work from any subfolder.
+Cursor, Gemini, Antigravity and `AGENTS.md` readers are pointed at the two protocol files by their generated rules, so you can ask them to "start Compass for <task>" or "close Compass".
 
 ## The store
 
 | Tier | File | Read |
 |---|---|---|
-| 0 | `README.md` | every session |
-| 1 | `MAP.md` | every session — spoken task → one capsule → source files |
-| 1 | `STATE.md` | when the task depends on what is built |
-| 1 | `traps.md` | its index, before debugging; then only matching entries |
-| 2 | `capsules/<one>.md` | the one the map names, ≤ 60 lines |
+| 0 | `README.md` | every session: what the project is, and the rules of the store |
+| 1 | `MAP.md` | every session: the words someone would say → one capsule → source files |
+| 1 | `STATE.md` | when the task depends on what is built, broken, or waiting on a person |
+| 1 | `traps.md` | before debugging: its index (worded as symptoms), then only the matching entries |
+| 2 | `capsules/<one>.md` | only the one the map names; ≤ 60 lines; points at source |
 | 3 | the source | always, last, and it wins |
 
-Decisions, rules, schemas and plans never go in the store. It points at them.
+`sessions/` holds the rare hand-over note; `archive/` holds what has been promoted or retired. `protocol/` is generated.
+
+**What never goes in the store:** decisions (decision records), rules (your rules files), schemas and contracts (the code), plans and task lists (your plan). The store *points* at them. A copy is a second source of truth that will drift.
+
+**Every note carries** `type`, `status`, `origin` (`human` or `ai-derived`; an agent never rewrites a human's line) and `verified`, the date it was last checked against real code.
 
 ## What the lint checks
 
-**Errors** (provably wrong now):
+**Errors** — provably wrong right now; exit 1:
 
-- front matter, with a valid `type`, `status`, `origin` and `verified`
-- dead links and dead `#anchors`
-- backticked paths in `MAP.md` and capsules that do not exist, read from the project root
-- `sources:` entries that do not exist
-- a capsule over its line cap, or with a bad abstract
-- a `MAP.md` abstract that does not match its capsule
-- a trap missing from the index, a stale index line or a wrong anchor
-- a future `verified:` date
+- front matter missing, or with an invalid `type`, `status`, `origin` or `verified`
+- a dead link or a dead `#anchor`
+- a backticked path in `MAP.md` or a capsule that does not exist, read from the project root
+- a `sources:` entry that does not exist
+- a capsule over its line cap, or an abstract that is missing, too long, or more than one sentence
+- a `MAP.md` abstract that differs from its capsule's own
+- a trap missing from the index, an index line with no entry, or a wrong anchor
+- a `verified:` date in the future
 - a generated file or block that differs from `compass sync` output
-- config paths that do not exist
+- a config path that does not exist
 
-**Warnings** (for a human to judge):
+**Warnings** — judgement calls for a human:
 
-- a note unverified for too long
-- a source changed in git after `verified:`
-- MAP, STATE or one MAP row over its size cap
-- an unrouted capsule
-- an unpromoted session note
-- short paths outside MAP and capsules
+- the configured plan or roadmap changed in git after `STATE.md` was verified
+- a note's source changed in git after the note was verified (session notes excepted: they are snapshots)
+- a note unverified for longer than `staleDays`
+- a session note older than `promoteDays`: promote what is durable, then archive it
+- `MAP.md`, `STATE.md`, the README, one MAP row or the traps index over its size cap
+- a capsule that MAP never routes to
+- a short path outside MAP and capsules
+- a placeholder left by `init`
+- a plan, roadmap, decision folder or schema found on disk that the config does not name yet
 
-Fenced code is never linted.
+Fenced code is never linted. Every path is resolved from the project root, so the lint gives the same answer from any subfolder.
+
+## Commands
+
+| Command | Does |
+|---|---|
+| `compass init` | Writes the config (owner from git, paths discovered) and the store if they are missing, then syncs. `--ci`, `--hook`, `--tools`, `--project`, `--owner` |
+| `compass sync` | Regenerates every tool's files from the config. `--check` only reports drift |
+| `compass lint` | Rot detection. Exits 1 on any error |
+| `compass doctor` | Shows the root, config, every generated file's status, every configured path, hints, hook and CI |
+| `compass hook` | Installs a git pre-commit hook that runs the lint |
+| `compass version` | Prints the version |
+
+All of them accept `--root <dir>`. Otherwise the root is the nearest folder holding `compass.config.json`, or else the git top level.
 
 ## Configuration
 
@@ -90,34 +131,63 @@ Fenced code is never linted.
   "version": 1,
   "project": "My App",
   "owner": "Sam",
-  "ownerCommits": true,            // the close routine ends with "do not commit"
+  "ownerCommits": true,            // close ends with "do not commit; Sam does"
   "store": "docs/compass",
   "tools": ["claude", "cursor", "gemini", "antigravity", "agents"],
   "lintCommand": "npm run compass", // what agents are told to run
   "ci": true,                       // also generate .github/workflows/compass.yml
-  "paths": { "plan": "…", "roadmap": "…", "adr": "…", "schema": "…", "rules": ["CLAUDE.md"] },
+  "paths": {
+    "plan": "PLAN.md",              // '' = not set yet (the lint suggests candidates)
+    "roadmap": false,               // false = this project has none (no suggestions)
+    "adr": "docs/adr/",
+    "schema": "prisma/schema.prisma",
+    "rules": ["CONTRIBUTING.md"]
+  },
   "authority": [],                  // Markdown lines, highest first; empty = derived from paths
   "state": { "inFlight": "In flight right now", "waiting": "Waiting on Sam" },
-  "pointerNote": "",                // one extra project-specific line in every pointer
-  "targets": { "gemini": ".gemini/GEMINI.md" },  // override where a tool's file lives
+  "pointerNote": "",                // one extra project-specific line in every tool's pointer
+  "targets": { "gemini": ".gemini/GEMINI.md" },  // where each tool's file lives
   "caps": { "capsuleLines": 60, "mapRowChars": 1200, "fileChars": { "MAP.md": 12000 } },
   "ignorePaths": []                 // backticked path prefixes the lint must not resolve
 }
 ```
 
-Defaults are in `src/config.mjs`.
+Compass acts only on what the config says. Paths it discovers are suggestions you confirm, never behaviour. Defaults are in [`src/config.mjs`](src/config.mjs).
+
+### What is generated, and what is yours
+
+| Generated by `compass sync` — never edit | Yours |
+|---|---|
+| `docs/compass/protocol/start.md`, `close.md` | `compass.config.json` |
+| `.claude/commands/compass-start.md`, `compass-close.md` | every note in `docs/compass/` |
+| `.cursor/rules/compass.mdc` | everything outside the `compass:begin` / `compass:end` markers |
+| the block between `compass:begin` and `compass:end` in the store README, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and the Antigravity rules | |
+| `.github/workflows/compass.yml` (when `ci` is on) | |
+
+To change a procedure, change the config, or change Compass and run `sync` in each project. The lint fails on hand edits, so the copies for different tools can never drift apart.
 
 ## CI
 
-`compass sync` with `"ci": true` writes `.github/workflows/compass.yml`, which runs the lint on every push and pull request. It needs no secrets.
+`compass sync` with `"ci": true` writes `.github/workflows/compass.yml`, which runs the lint on every push and pull request with full git history, so the staleness checks work. It needs no secrets.
 
-To pin a version, use `github:EdwardBatt/Compass#v0.1.0` in your `lintCommand`. Without a tag, `npx` runs the latest commit on `main`.
+To pin a version, use `github:EdwardBatt/Compass#v0.2.0` in your `lintCommand`. Without a tag, `npx` runs the latest commit on `main`.
+
+## Design principles
+
+- **The source wins.** A note is orientation, dated and assumed stale until checked. When a note contradicts the code, the note is fixed in the same session.
+- **Point, don't copy.** Capsules are capped at 60 lines, and backticked paths must resolve, so a note stays a pointer rather than becoming a second copy of the code.
+- **Errors are facts; warnings are judgement.** The lint fails only on things that are provably wrong right now.
+- **Most sessions write nothing.** The bar for a trap is that it cost real time *and* its cause was hidden.
+- **Hindsight is data.** The trajectory block's `missed:` field records what the map failed to point at — the only evidence for *why did the agent miss X*.
+- **Project-agnostic.** Nothing in Compass knows your stack, your plan's name or your folder layout; the config does.
 
 ## Developing
 
 ```bash
-npm test     # node:test, no dependencies
+npm test     # node:test, no dependencies; CI runs it on Linux, Windows and macOS, Node 18–22
 ```
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence
 

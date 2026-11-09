@@ -15,6 +15,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, dirname, resolve, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { check as checkDrift } from './sync.mjs'
+import { hints } from './discover.mjs'
 
 export const TYPES = ['map', 'state', 'trap', 'capsule', 'session']
 export const STATUSES = ['current', 'needs-check', 'superseded', 'draft']
@@ -156,6 +157,10 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
   const ignored = (p) => config.ignorePaths.some((prefix) => p.startsWith(prefix))
   const commitDates = new Map()
   const slugCache = new Map() // per run: a long-lived process must not see yesterday's headings
+  const planTracked = [['plan', config.paths.plan], ['roadmap', config.paths.roadmap]]
+    .filter(([, p]) => typeof p === 'string' && p)
+    .map(([label, p]) => [label, p.replace(/\/$/, '')])
+  const planPaths = planTracked.map(([, p]) => p)
   const commitDate = (p) => {
     if (!commitDates.has(p)) commitDates.set(p, git ? lastCommitDate(root, p) : null)
     return commitDates.get(p)
@@ -168,6 +173,7 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     const fromStore = posix(relative(storeDir, file))
     const isMap = fromStore === 'MAP.md'
     const isCapsule = fromStore.startsWith('capsules/')
+    const isState = fromStore === 'STATE.md'
 
     // ---- 1. every note declares what it is, where it came from, and when it was last checked ----
     if (!fm) {
@@ -237,7 +243,11 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
         errors.push(`${name}: source '${src}' does not exist`)
         continue
       }
-      if (validDate && statSync(abs).isFile()) {
+      // Session notes are snapshots of one day: a later change to their sources says nothing about
+      // them, and the promote-or-archive warning already covers their age. STATE's link to the
+      // configured plan and roadmap is checked once, in section 7, whether or not it is listed here.
+      const tracked = isState && planPaths.includes(src.replace(/\/$/, ''))
+      if (validDate && fm.type !== 'session' && !tracked && statSync(abs).isFile()) {
         const changed = commitDate(src)
         if (changed && changed > fm.verified) {
           warnings.push(`${name}: source '${src}' changed on ${changed}, after this note was verified (${fm.verified}) — re-check it`)
@@ -257,6 +267,23 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
       }
     }
 
+    // ---- 7. STATE against the plan the config names — no note has to remember to list it ----
+    // A plan that moved after STATE was last checked is the drift Compass exists to catch: the plan
+    // says built, STATE says not, and the next start proposes work that is already done.
+    if (isState && validDate) {
+      for (const [label, p] of planTracked) {
+        const changed = commitDate(p)
+        if (changed && changed > fm.verified) {
+          warnings.push(`${name}: the ${label} (\`${p}\`) changed on ${changed}, after STATE was verified (${fm.verified}) — check STATE still agrees with it, then set verified`)
+        }
+      }
+    }
+
+    // ---- 8. placeholders left by `compass init` ----
+    for (const [, what] of prose.matchAll(/<!--\s*compass:todo\b\s*([\s\S]*?)-->/g)) {
+      warnings.push(`${name}: still has a placeholder${what.trim() ? ` — ${what.trim()}` : ''}`)
+    }
+
     if (isMap) {
       // MAP.md carries a verbatim copy of each capsule's abstract so the map alone can route.
       for (const m of prose.matchAll(/\]\((capsules\/[^)]+)\)([^|\n]*)/g)) {
@@ -271,7 +298,7 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     }
   }
 
-  // ---- 7. MAP.md's copy of an abstract must match the capsule's own, character for character ----
+  // ---- 9. MAP.md's copy of an abstract must match the capsule's own, character for character ----
   for (const [target, mapCopy] of linkedFromMap) {
     const own = capsuleAbstracts.get(target)
     if (own === undefined) continue
@@ -281,7 +308,7 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     }
   }
 
-  // ---- 8. traps.md indexes itself, exactly ----
+  // ---- 10. traps.md indexes itself, exactly ----
   // The index is read whole and the entries are not, so an entry the index does not list is one
   // nobody will ever be routed to. Matching is exact — a substring match let "Foo" pass for "Foo bar".
   const trapsFile = join(storeDir, 'traps.md')
@@ -310,7 +337,7 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     }
   }
 
-  // ---- 9. orphans: a capsule the map never routes to will never be read ----
+  // ---- 11. orphans: a capsule the map never routes to will never be read ----
   for (const file of files) {
     const fromStore = posix(relative(storeDir, file))
     if (fromStore.startsWith('capsules/') && !linkedFromMap.has(fromStore)) {
@@ -318,9 +345,14 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     }
   }
 
-  // ---- 10. generated files: one config, every tool, no hand edits ----
+  // ---- 12. generated files: one config, every tool, no hand edits ----
   for (const { path, problem } of checkDrift(root, config)) {
     errors.push(`${path}: ${problem} — run \`compass sync\`, or change compass.config.json instead`)
+  }
+
+  // ---- 13. hints: a plan or decision folder the config does not name yet ----
+  for (const h of hints(root, config)) {
+    warnings.push(`compass.config.json: found \`${h.path}\` — if it holds this project's ${h.label}, set paths.${h.key} to it and run \`compass sync\` (or set it to false)`)
   }
 
   return { errors, warnings, notes: files.length }

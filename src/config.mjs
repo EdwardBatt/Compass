@@ -21,6 +21,7 @@ export const DEFAULTS = {
   // What agents are told to run. A project with an npm script usually points this at it.
   lintCommand: DEFAULT_LINT,
   ci: false,
+  // '' = not set yet (Compass suggests candidates it finds); false = this project has none.
   paths: { plan: '', roadmap: '', adr: '', schema: '', rules: [] },
   // Markdown lines, highest authority first. Empty: derived from `paths`.
   authority: [],
@@ -116,11 +117,17 @@ export function validate(config, root) {
   }
   if (!Array.isArray(config.authority)) errors.push(`${CONFIG_FILE}: authority must be a list of Markdown lines`)
   if (!Array.isArray(config.paths?.rules)) errors.push(`${CONFIG_FILE}: paths.rules must be a list`)
+  for (const key of ['plan', 'roadmap', 'adr', 'schema']) {
+    const v = config.paths?.[key]
+    if (typeof v !== 'string' && v !== false) {
+      errors.push(`${CONFIG_FILE}: paths.${key} must be a path, '' (not set yet) or false (this project has none)`)
+    }
+  }
   // A configured path that does not exist would send every agent to a file that is not there.
   if (root) {
     const p = config.paths ?? {}
     for (const [key, value] of [['plan', p.plan], ['roadmap', p.roadmap], ['adr', p.adr], ['schema', p.schema], ...(p.rules ?? []).map((r) => ['rules', r])]) {
-      if (value && !existsSync(join(root, value))) errors.push(`${CONFIG_FILE}: paths.${key} '${value}' does not exist`)
+      if (typeof value === 'string' && value && !existsSync(join(root, value))) errors.push(`${CONFIG_FILE}: paths.${key} '${value}' does not exist`)
     }
   }
   return errors

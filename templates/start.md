@@ -10,6 +10,10 @@ Orient yourself in {{project}} before starting work on: **{{args}}**
 
 Offer {{owner}} a numbered shortlist, most urgent first, one line each, saying what it is and why it is urgent. Close with a status line: what is uncommitted, and what the last commit was. Name the `verified:` date of `STATE.md` — **the list is only as current as the last close, and {{owner}} must be able to see that.** If every source is silent, say so plainly rather than padding the list.
 
+{{#if plan}}{{else}}**No plan is configured** — `paths.plan` in `compass.config.json` is empty, so there is nothing to propose work from. Say so first. If the project has a plan under another name, offer to add it to the config. If it has none yet, the most useful next step is usually to write one: a short list of milestones in any Markdown file. Then set `paths.plan` and run `compass sync`, so the next start proposes from it.
+
+{{/if}}**If the store is still empty** — `MAP.md` has no rows and `STATE.md` has no entries — say that Compass is new here and fills itself as work happens: ask for the first task, and expect the first close to add the first map row. Do not invent notes to fill it.
+
 Then **stop and wait.** Do not read a capsule. Do not start work. When {{owner}} picks one, treat the answer as the task and run the protocol below from step 1.
 
 ---
