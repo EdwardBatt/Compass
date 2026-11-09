@@ -307,3 +307,34 @@ test('a path that is neither a string nor false is a config error', () => {
   assert.ok(loadConfig(root).errors.some((e) => e.includes('paths.adr must be')))
   rmSync(root, { recursive: true })
 })
+
+test('init pins the version it ran; CI checks that version out and the lint command uses it', () => {
+  const root = mkdtempSync(join(tmpdir(), 'compass-'))
+  execFileSync(process.execPath, [BIN, 'init', '--root', root, '--owner', 'Sam', '--ci'])
+  const version = JSON.parse(readFileSync(join(dirname(BIN), '..', 'package.json'), 'utf8')).version
+  const { config } = loadConfig(root)
+  assert.equal(config.pin, `v${version}`)
+  assert.equal(config.lintCommand, `npx --yes github:EdwardBatt/Compass#v${version} lint`)
+  assert.match(read(root, '.github/workflows/compass.yml'), new RegExp(`ref: v${version.replace(/\./g, '\.')}`))
+  assert.match(read(root, 'AGENTS.md'), new RegExp(`Compass#v${version.replace(/\./g, '\.')} lint`))
+  // An explicit lintCommand wins over the pin, and no pin means main.
+  const raw = JSON.parse(read(root, 'compass.config.json'))
+  write(root, 'compass.config.json', JSON.stringify({ ...raw, pin: '', lintCommand: 'npm run compass' }))
+  const unpinned = loadConfig(root).config
+  assert.equal(unpinned.lintCommand, 'npm run compass')
+  sync(root, unpinned)
+  assert.doesNotMatch(read(root, '.github/workflows/compass.yml'), /ref:/)
+  write(root, 'compass.config.json', JSON.stringify({ ...raw, pin: 'v1; rm -rf /' }))
+  assert.match(loadConfig(root).errors.join('\n'), /pin must be a Compass tag/)
+  rmSync(root, { recursive: true })
+})
+
+test('the example store lints with no errors and its generated files are current', () => {
+  const root = join(dirname(BIN), '..', 'examples', 'larder')
+  const { config, errors: configErrors } = loadConfig(root)
+  assert.deepEqual(configErrors, [])
+  assert.deepEqual(check(root, config), [])
+  const { errors, notes } = lint(root, config, { git: false })
+  assert.deepEqual(errors, [])
+  assert.ok(notes >= 6, `expected a full store, got ${notes} notes`)
+})

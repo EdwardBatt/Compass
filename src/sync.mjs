@@ -8,6 +8,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { render } from './render.mjs'
+import { REPO } from './config.mjs'
 
 const TEMPLATES = join(dirname(fileURLToPath(import.meta.url)), '..', 'templates')
 const tpl = (name) => readFileSync(join(TEMPLATES, name), 'utf8').replace(/\r\n/g, '\n')
@@ -48,6 +49,7 @@ export function context(config, { tool = 'store', today = isoToday() } = {}) {
   return {
     ...config,
     today,
+    repo: REPO,
     plan: p.plan,
     roadmap: p.roadmap,
     adr: p.adr,

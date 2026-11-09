@@ -22,21 +22,43 @@ No database, no plugin, no dependencies: Node 18.17+ and git.
 
 ## Quick start
 
-In any repository, new or old:
+You need Node 18.17 or later and a git repository (run `git init` first in a new folder; the staleness checks and the hook read git). Then, in the repository:
 
 ```bash
-npx --yes github:EdwardBatt/Compass init --tools claude,cursor,gemini,antigravity,agents --ci --hook
+npx --yes github:EdwardBatt/Compass#v0.3.0 init --tools claude,cursor,gemini,antigravity,agents --ci --hook
 ```
 
 `init`:
 
-- writes `compass.config.json`. It takes the owner from `git config user.name` and pre-fills `paths` with any plan, roadmap, decision-record folder or schema it finds under common names;
+- writes `compass.config.json`. It takes the owner from `git config user.name`, pins the Compass version it ran, and pre-fills `paths` with any plan, roadmap, decision-record folder or schema it finds under common names;
 - creates the store in `docs/compass/`;
 - generates every tool's instructions;
 - with `--ci`, adds a GitHub Actions workflow; with `--hook`, adds a pre-commit hook;
 - ends with numbered next steps.
 
-Add `--project "Name"` and `--owner "Name"` to override what it guesses.
+Add `--project "Name"` and `--owner "Name"` to override what it guesses. List only the tools you use; `agents` covers any tool that reads `AGENTS.md`.
+
+## See it filled in
+
+[`examples/larder`](examples/larder) is a small, made-up app with a store as it looks after a few weeks of work. It lints clean, and the test suite keeps it that way. Read these to see what good looks like:
+
+| File | Shows |
+|---|---|
+| [`MAP.md`](examples/larder/docs/compass/MAP.md) | rows worded as people speak, each routing to one capsule and the source |
+| [`capsules/shopping-list.md`](examples/larder/docs/compass/capsules/shopping-list.md) | a capsule that points at source, says what deliberately does not work, and marks inference |
+| [`STATE.md`](examples/larder/docs/compass/STATE.md) | what actually runs, including where the plan overstates it |
+| [`traps.md`](examples/larder/docs/compass/traps.md) | entries worded as symptoms, each with its cost and the test that now catches it |
+| [`sessions/2026-11-09.md`](examples/larder/docs/compass/sessions/2026-11-09.md) | the rare session note, with a trajectory whose `missed:` led to a new MAP row |
+| [`compass.config.json`](examples/larder/compass.config.json) | a pinned config with a plan, decision records, a schema and a rules file |
+
+## Adopting in an existing project
+
+Do not try to document the codebase on day one. A store written up front is a guess about what agents will need, and most of it will never be read.
+
+1. Run `init`, write the README paragraph, and check the `paths` it filled in.
+2. Seed `traps.md` with the two or three failures everyone on the team already knows about: the ones a newcomer always hits.
+3. If the plan overstates what is built, say so in `STATE.md`. That alone stops agents building on features that do not exist.
+4. Then work normally. Each task the map cannot route is recorded as `missed:`, and close adds the row. After a few weeks, the map covers the areas people actually work in, and nothing else.
 
 ## Your first week
 
@@ -72,7 +94,7 @@ Cursor, Gemini, Antigravity and `AGENTS.md` readers are pointed at the two proto
 | 0 | `README.md` | every session: what the project is, and the rules of the store |
 | 1 | `MAP.md` | every session: the words someone would say → one capsule → source files |
 | 1 | `STATE.md` | when the task depends on what is built, broken, or waiting on a person |
-| 1 | `traps.md` | before debugging: its index (worded as symptoms), then only the matching entries |
+| 1 | `traps.md` | before debugging: its index (worded as symptoms), then only the matching entries. Each entry is a `###` heading |
 | 2 | `capsules/<one>.md` | only the one the map names; ≤ 60 lines; points at source |
 | 3 | the source | always, last, and it wins |
 
@@ -118,7 +140,7 @@ Fenced code is never linted. Every path is resolved from the project root, so th
 | `compass init` | Writes the config (owner from git, paths discovered) and the store if they are missing, then syncs. `--ci`, `--hook`, `--tools`, `--project`, `--owner` |
 | `compass sync` | Regenerates every tool's files from the config. `--check` only reports drift |
 | `compass lint` | Rot detection. Exits 1 on any error |
-| `compass doctor` | Shows the root, config, every generated file's status, every configured path, hints, hook and CI |
+| `compass doctor` | Shows the root, config, every generated file's status, every configured path, hints, hook, CI and the pinned version |
 | `compass hook` | Installs a git pre-commit hook that runs the lint |
 | `compass version` | Prints the version |
 
@@ -134,7 +156,8 @@ All of them accept `--root <dir>`. Otherwise the root is the nearest folder hold
   "ownerCommits": true,            // close ends with "do not commit; Sam does"
   "store": "docs/compass",
   "tools": ["claude", "cursor", "gemini", "antigravity", "agents"],
-  "lintCommand": "npm run compass", // what agents are told to run
+  "pin": "v0.3.0",                  // the Compass version CI runs; '' = latest on main
+  "lintCommand": "npm run compass", // what agents are told to run; unset = npx at the pinned version
   "ci": true,                       // also generate .github/workflows/compass.yml
   "paths": {
     "plan": "PLAN.md",              // '' = not set yet (the lint suggests candidates)
@@ -170,7 +193,27 @@ To change a procedure, change the config, or change Compass and run `sync` in ea
 
 `compass sync` with `"ci": true` writes `.github/workflows/compass.yml`, which runs the lint on every push and pull request with full git history, so the staleness checks work. It needs no secrets.
 
-To pin a version, use `github:EdwardBatt/Compass#v0.2.0` in your `lintCommand`. Without a tag, `npx` runs the latest commit on `main`.
+The workflow checks out the version in `pin`, so CI runs the same Compass as your machine. With `pin` set to `''`, it runs the latest commit on `main`.
+
+## Upgrading
+
+1. Read the [CHANGELOG](CHANGELOG.md) for the new version.
+2. Set `"pin"` in `compass.config.json` to the new tag, and update the tag in your own `lintCommand` or npm script if it names one.
+3. Run `npx --yes github:EdwardBatt/Compass#<new tag> sync`. It rewrites every generated file to match.
+4. Run the lint, and commit the config and the regenerated files together.
+
+Until step 3, the lint reports the generated files as drift. That is intended: it means a procedure changed. `compass sync` and `compass doctor` say when the copy you are running is not the pinned version.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `npx github:EdwardBatt/Compass#vX.Y.Z …` prints nothing and exits 1 | The tag does not exist. Check the tag list on GitHub, or `git ls-remote --tags https://github.com/EdwardBatt/Compass` |
+| An old version runs after an upgrade | npx cached it. Delete the `_npx` folder in your npm cache (`npm config get cache` shows where), then rerun |
+| Every generated file is drift after an upgrade | Expected. Run `sync` at the new version (see *Upgrading*) |
+| The lint fails on a file you never edited | A teammate synced with a different version. Run `compass doctor` to compare versions, then sync at the pinned one |
+| The pre-commit hook does not run on Windows | Git for Windows runs hooks through its own `sh`, so commit from Git Bash, GitHub Desktop or VS Code. A hook installed from WSL needs WSL's `node` |
+| A trap is "not in the index", or the index lists one with "no entry" | The entry must be a `###` heading, and the index line must copy it exactly. The error gives the anchor it expects |
 
 ## Design principles
 

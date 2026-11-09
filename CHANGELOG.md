@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-11-09
+
+Pinned versions, and an example to learn from.
+
+- **Pinning.** A new `pin` setting holds the Compass tag a project runs. The generated CI workflow checks out that version, and an unset `lintCommand` uses it, so CI and every machine run the same Compass. `init` pins the version it ran. `sync` and `doctor` say when the running copy differs from the pin.
+- **Example.** `examples/larder` is a small app with a complete store: two capsules, a MAP with spoken-language rows, STATE that catches an overstated plan, two traps, and a session note with a trajectory. The test suite lints it, so it can never fall out of date.
+- **README.** New sections: prerequisites, the example, adopting Compass in an existing project, upgrading, and troubleshooting.
+- **Upgrade note.** Projects on 0.2.0 can add `"pin": "v0.3.0"`, then run `npx --yes github:EdwardBatt/Compass#v0.3.0 sync`. With `ci` on, only the workflow file changes.
+
 ## 0.2.0 — 2026-11-09
 
 From a blank repository to a working store, without guesswork.

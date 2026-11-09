@@ -60,6 +60,13 @@ function copyStore(src, dest, ctx, created, root) {
   }
 }
 
+/** Warns when this copy of Compass is not the version the project pins: its output would differ. */
+function pinNote(config) {
+  if (config.pin && config.pin !== `v${PKG.version}`) {
+    console.warn(`  note  this is Compass ${PKG.version}, but ${CONFIG_FILE} pins ${config.pin}. Run sync with github:EdwardBatt/Compass#${config.pin}, or set "pin": "v${PKG.version}" to upgrade.`)
+  }
+}
+
 function gitUserName(root) {
   try {
     return execFileSync('git', ['config', 'user.name'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null
@@ -110,7 +117,7 @@ const commands = {
         ownerCommits: false,
         store: DEFAULTS.store,
         tools,
-        lintCommand: DEFAULTS.lintCommand,
+        pin: `v${PKG.version}`,
         ci: argv.includes('--ci'),
         paths: { plan: found.plan ?? '', roadmap: found.roadmap ?? '', adr: found.adr ?? '', schema: found.schema ?? '', rules: [] },
         state: { ...DEFAULTS.state, waiting: `Waiting on ${owner}` },
@@ -155,6 +162,7 @@ const commands = {
     }
     const changed = sync(root, config)
     for (const f of changed) console.log('  wrote ' + f)
+    pinNote(config)
     console.log(changed.length ? `compass sync: ${changed.length} file(s) updated` : 'compass sync: nothing to change')
   },
 
@@ -192,6 +200,9 @@ const commands = {
     }
     console.log(`hook    ${hook}`)
     console.log(`ci      ${config.ci ? config.targets.ci : 'off'}`)
+    console.log(`pin     ${config.pin || 'none — the latest commit on main'}`)
+    console.log(`lint    ${config.lintCommand}`)
+    pinNote(config)
     for (const key of ['plan', 'roadmap', 'adr', 'schema']) {
       const v = config.paths[key]
       console.log(`${key.padEnd(8)}${v === false ? 'none (set to false)' : v || 'not set'}`)

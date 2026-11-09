@@ -13,9 +13,10 @@ jobs:
           fetch-depth: 0 # the staleness check reads git history
       - uses: actions/checkout@v4
         with:
-          repository: EdwardBatt/Compass
+          repository: {{repo}}
           path: .compass-tool
-      - uses: actions/setup-node@v4
+{{#if pin}}          ref: {{pin}} # the Compass version this project is pinned to
+{{/if}}      - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: node .compass-tool/bin/compass.mjs lint

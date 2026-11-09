@@ -1,0 +1,10 @@
+{
+  "name": "larder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test spec/merge.spec.js",
+    "compass": "npx --yes github:EdwardBatt/Compass#v0.3.0 lint"
+  }
+}

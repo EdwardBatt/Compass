@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "project": "Larder",
+  "owner": "Sam",
+  "ownerCommits": true,
+  "store": "docs/compass",
+  "tools": ["claude", "cursor", "agents"],
+  "pin": "v0.3.0",
+  "lintCommand": "npm run compass",
+  "ci": false,
+  "paths": {
+    "plan": "PLAN.md",
+    "roadmap": false,
+    "adr": "docs/adr/",
+    "schema": "db/schema.sql",
+    "rules": ["CONTRIBUTING.md"]
+  },
+  "state": { "inFlight": "In flight right now", "waiting": "Waiting on Sam" }
+}

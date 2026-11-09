@@ -8,7 +8,10 @@ import { execFileSync } from 'node:child_process'
 
 export const CONFIG_FILE = 'compass.config.json'
 export const TOOLS = ['claude', 'cursor', 'gemini', 'antigravity', 'agents']
-export const DEFAULT_LINT = 'npx --yes github:EdwardBatt/Compass lint'
+export const REPO = 'EdwardBatt/Compass'
+/** The lint command for a pinned (or, with '', the latest) version of Compass. */
+export const lintFor = (pin) => `npx --yes github:${REPO}${pin ? '#' + pin : ''} lint`
+export const DEFAULT_LINT = lintFor('')
 
 export const DEFAULTS = {
   version: 1,
@@ -18,7 +21,11 @@ export const DEFAULTS = {
   ownerCommits: false,
   store: 'docs/compass',
   tools: ['claude', 'agents'],
-  // What agents are told to run. A project with an npm script usually points this at it.
+  // The Compass version (a git tag such as 'v0.3.0') this project runs. CI checks it out, and the
+  // default lintCommand uses it. '' = the latest commit on main.
+  pin: '',
+  // What agents are told to run. Unset: derived from `pin`. A project with an npm script usually
+  // points this at it.
   lintCommand: DEFAULT_LINT,
   ci: false,
   // '' = not set yet (Compass suggests candidates it finds); false = this project has none.
@@ -94,6 +101,7 @@ export function loadConfig(root) {
     return { config: structuredClone(DEFAULTS), errors: [`${CONFIG_FILE} is not valid JSON: ${e.message}`] }
   }
   const config = merge(structuredClone(DEFAULTS), raw)
+  if (raw.lintCommand === undefined && typeof config.pin === 'string') config.lintCommand = lintFor(config.pin)
   return { config, errors: validate(config, root) }
 }
 
@@ -114,6 +122,9 @@ export function validate(config, root) {
     if (typeof p !== 'string' || isAbsolute(p) || p.split(/[\\/]/).includes('..')) {
       errors.push(`${CONFIG_FILE}: '${key}' must be a path inside the project (got ${JSON.stringify(p)})`)
     }
+  }
+  if (typeof config.pin !== 'string' || !/^[\w.\/-]*$/.test(config.pin)) {
+    errors.push(`${CONFIG_FILE}: pin must be a Compass tag such as "v0.3.0", or '' for the latest (got ${JSON.stringify(config.pin)})`)
   }
   if (!Array.isArray(config.authority)) errors.push(`${CONFIG_FILE}: authority must be a list of Markdown lines`)
   if (!Array.isArray(config.paths?.rules)) errors.push(`${CONFIG_FILE}: paths.rules must be a list`)
