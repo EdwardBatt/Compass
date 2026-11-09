@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process'
 
 export const CONFIG_FILE = 'compass.config.json'
 export const TOOLS = ['claude', 'cursor', 'gemini', 'antigravity', 'agents']
-export const DEFAULT_LINT = 'npx --yes github:estazdev/compass lint'
+export const DEFAULT_LINT = 'npx --yes github:EdwardBatt/Compass lint'
 
 export const DEFAULTS = {
   version: 1,

@@ -1,7 +1,3 @@
-#
-# Compass is a private repository, so CI needs a token to fetch it: add a fine-grained personal
-# access token with read access to estazdev/compass as the repository secret COMPASS_TOKEN.
-# Without it the job passes with a warning rather than failing every push.
 name: compass
 
 on:
@@ -11,23 +7,15 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    env:
-      COMPASS_TOKEN: ${{ secrets.COMPASS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the staleness check reads git history
-      - if: env.COMPASS_TOKEN == ''
-        run: echo "::warning::COMPASS_TOKEN is not set, so the Compass lint did not run"
-      - if: env.COMPASS_TOKEN != ''
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          repository: estazdev/compass
-          token: ${{ secrets.COMPASS_TOKEN }}
+          repository: EdwardBatt/Compass
           path: .compass-tool
-      - if: env.COMPASS_TOKEN != ''
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - if: env.COMPASS_TOKEN != ''
-        run: node .compass-tool/bin/compass.mjs lint
+      - run: node .compass-tool/bin/compass.mjs lint

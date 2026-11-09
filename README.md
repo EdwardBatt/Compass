@@ -7,7 +7,7 @@ No database, no plugin, no dependencies: Node 18.17+ and git.
 ## Quick start
 
 ```bash
-npx --yes github:estazdev/compass init --project "My App" --owner "Sam" --tools claude,cursor,gemini,antigravity,agents
+npx --yes github:EdwardBatt/Compass init --project "My App" --owner "Sam" --tools claude,cursor,gemini,antigravity,agents
 ```
 
 This creates:
@@ -18,6 +18,19 @@ This creates:
 - one pointer per tool: a `compass:begin … compass:end` block in `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` and the Antigravity rules, `.cursor/rules/compass.mdc`, and `/compass-start` and `/compass-close` for Claude Code (generated)
 
 Then fill in `paths` in the config, run `compass sync`, and write the store README's first paragraph.
+
+## Daily use
+
+The CLI sets Compass up. Day to day, two routines do the work, one at each end of a session.
+
+| When | Claude Code | Other tools | What happens |
+|---|---|---|---|
+| Before work | `/compass-start <task>` | follow `docs/compass/protocol/start.md` | Reads the map, one capsule and the source it names, then reports what it loaded, the decisions and traps that apply, and anything waiting on a person. Ends with a trajectory block recording the context it was given |
+| Not sure what to do next | `/compass-start` (no task) | same file, no task | Proposes a short, ranked list from STATE, the newest session note, git and the plan. Then waits for you to pick |
+| After work | `/compass-close` | follow `docs/compass/protocol/close.md` | Writes back only what is durable: a trap, a state change, a capsule edit or a missing map row. Drafts decision records instead of putting decisions in notes. Runs the lint. **Most sessions write nothing** |
+| Before every commit | `compass lint` (or your `lintCommand`) | same | Fails on anything provably wrong in the store |
+
+Cursor, Gemini, Antigravity and `AGENTS.md` readers are pointed at the two protocol files by their generated rules, so you can just ask them to "start Compass for <task>" or "close Compass".
 
 ## Commands
 
@@ -75,8 +88,8 @@ Fenced code is never linted.
 ```jsonc
 {
   "version": 1,
-  "project": "Reaptor",
-  "owner": "Edward",
+  "project": "My App",
+  "owner": "Sam",
   "ownerCommits": true,            // the close routine ends with "do not commit"
   "store": "docs/compass",
   "tools": ["claude", "cursor", "gemini", "antigravity", "agents"],
@@ -84,7 +97,7 @@ Fenced code is never linted.
   "ci": true,                       // also generate .github/workflows/compass.yml
   "paths": { "plan": "…", "roadmap": "…", "adr": "…", "schema": "…", "rules": ["CLAUDE.md"] },
   "authority": [],                  // Markdown lines, highest first; empty = derived from paths
-  "state": { "inFlight": "In flight right now", "waiting": "Waiting on Edward" },
+  "state": { "inFlight": "In flight right now", "waiting": "Waiting on Sam" },
   "pointerNote": "",                // one extra project-specific line in every pointer
   "targets": { "gemini": ".gemini/GEMINI.md" },  // override where a tool's file lives
   "caps": { "capsuleLines": 60, "mapRowChars": 1200, "fileChars": { "MAP.md": 12000 } },
@@ -94,14 +107,18 @@ Fenced code is never linted.
 
 Defaults are in `src/config.mjs`.
 
-## CI and the private repository
+## CI
 
-`compass sync` with `"ci": true` writes a workflow that checks this repository out with the secret `COMPASS_TOKEN`: a fine-grained token with read access to `estazdev/compass`. Without the secret the job passes with a warning instead of failing every push.
+`compass sync` with `"ci": true` writes `.github/workflows/compass.yml`, which runs the lint on every push and pull request. It needs no secrets.
 
-Locally, `npx github:estazdev/compass` uses your git credentials. To pin a version, use `github:estazdev/compass#v0.1.0`.
+To pin a version, use `github:EdwardBatt/Compass#v0.1.0` in your `lintCommand`. Without a tag, `npx` runs the latest commit on `main`.
 
 ## Developing
 
 ```bash
 npm test     # node:test, no dependencies
 ```
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
