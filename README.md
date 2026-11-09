@@ -2,6 +2,8 @@
 
 **Shared project memory for AI coding agents, with a lint that keeps it honest.**
 
+![Compass in 40 seconds: init sets up every tool, a hand edit to the generated rules fails the lint, sync restores them](docs/CompassDemo.gif)
+
 AI coding agents start every session knowing nothing about your project. They either read too much (slow, expensive, distracted) or too little (confident and wrong). Notes written to help them go stale silently, and each tool keeps its own copy of the rules.
 
 Compass fixes that with three things:
@@ -228,6 +230,7 @@ Until step 3, the lint reports the generated files as drift. That is intended: i
 
 ```bash
 npm test     # node:test, no dependencies; CI runs it on Linux, Windows and macOS, Node 18–22
+pwsh -File scripts/demo.ps1   # replays the README demo in a temp folder, for re-recording docs/CompassDemo.gif
 ```
 
 See [CHANGELOG.md](CHANGELOG.md).
