@@ -1,0 +1,17 @@
+---
+description: Compass — shared project orientation. Read before touching an unfamiliar area.
+alwaysApply: true
+---
+
+{{header}}
+
+# Compass — shared project orientation
+
+Read `{{store}}/README.md` and `{{store}}/MAP.md` before touching an unfamiliar area. The map routes a task to one capsule and the source files that matter; do not read the whole folder. `{{store}}/STATE.md` says what is actually built.
+
+The steps are in `{{store}}/protocol/start.md` (orient) and `{{store}}/protocol/close.md` (write back). Most sessions write nothing back.
+
+Run `{{lintCommand}}` before any commit. Never edit a generated Compass file; change `compass.config.json` and run `compass sync`.
+{{#if pointerNote}}
+{{pointerNote}}
+{{/if}}
