@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Shared, agent-independent project orientation for AI coding tools: a tiered Markdown store, a rot-detecting lint, and generated rule files for Claude Code, Cursor, Gemini, Antigravity and AGENTS.md.",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "repository": "github:EdwardBatt/Compass",
   "type": "module",
   "bin": {

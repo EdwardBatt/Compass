@@ -121,4 +121,6 @@ npm test     # node:test, no dependencies
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+[Mozilla Public License 2.0](LICENSE). You can use Compass in any project, commercial or closed-source, and your own files stay yours. If you distribute a modified version of Compass's own files, those changes must be shared under the MPL too.
+
+**Exception for generated files.** Files that `compass init` and `compass sync` generate in your project, and the notes you write in your Compass store, are yours to use, change and distribute under any terms you choose. The MPL does not apply to them. It applies only to Compass itself.
