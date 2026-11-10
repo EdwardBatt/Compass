@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Fix: the pre-commit hook under GitHub Desktop on Windows.** GitHub Desktop can run hooks in WSL's bash while passing the Windows PATH, so `npx` resolved to a path such as `c:/nvm4w/nodejs/npx` that does not exist there, and every commit failed. When the lint command's tool does not resolve to an executable, the hook now puts `/usr/local/bin:/usr/bin:/bin` first. Elsewhere it behaves as before. Run `compass hook` again to update an installed hook.
+- **Fix: the pre-commit hook under GitHub Desktop on Windows.** On Windows, `npx` and `npm` are bash scripts. GitHub Desktop runs hooks with a Git that has no bash, so the script started the next bash on the PATH, usually WSL's, which cannot see Windows paths: every commit failed with `/bin/bash: C:/.../npx: No such file or directory`. When npm's entry points sit next to `node`, the hook now runs `npx` and `npm` through `node` directly. Elsewhere it uses them as before. Run `compass hook` again to update an installed hook.
 
 ## 0.3.0 — 2026-11-09
 

@@ -1,17 +1,22 @@
 // The git pre-commit hook that `compass hook` and `compass init --hook` install.
 //
-// GitHub Desktop on Windows can run hooks in WSL's bash while passing the Windows PATH, so the lint
-// command's tool (npx, npm, node) resolves to a Windows path that does not exist there, and every
-// commit fails. When the tool does not resolve to an executable, the hook puts the system's own bin
-// folders first. Everywhere else the check passes and the PATH is left alone.
+// On Windows, `npx` and `npm` are bash scripts (`#!/usr/bin/env bash`). GitHub Desktop runs hooks
+// with a cut-down Git that has `sh` but no `bash`, so `env` finds the next bash on the PATH, which
+// is usually WSL's (C:\Windows\System32\bash.exe). WSL cannot see the Windows path it is handed and
+// every commit fails with `/bin/bash: C:/.../npx: No such file or directory`.
+//
+// When npm's own entry points sit next to `node` (the Windows layout), the hook runs them with
+// `node` directly, so no bash is involved. Elsewhere `npx` and `npm` are used as normal.
 export function hookScript(lintCommand) {
-  const tool = lintCommand.trim().split(/\s+/)[0]
   return [
     '#!/bin/sh',
     '# compass: block a commit while the orientation store has errors',
-    "# If the lint's tool is not a real executable here (GitHub Desktop running the hook in WSL with",
-    "# the Windows PATH), use the system's own bin folders first.",
-    `t="$(command -v ${tool})"; [ -n "$t" ] && [ -x "$t" ] || PATH="/usr/local/bin:/usr/bin:/bin:$PATH"`,
+    '# On Windows, run npx and npm through node, so no bash is needed (GitHub Desktop has none).',
+    'n="$(command -v node)"; d="$(dirname "$n")/node_modules/npm/bin"',
+    'if [ -n "$n" ] && [ -f "$d/npx-cli.js" ]; then',
+    '  npx() { "$n" "$d/npx-cli.js" "$@"; }',
+    '  npm() { "$n" "$d/npm-cli.js" "$@"; }',
+    'fi',
     `${lintCommand} || { echo "Compass lint failed: fix the store, or run compass sync"; exit 1; }`,
     '',
   ].join('\n')
