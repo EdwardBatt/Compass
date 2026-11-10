@@ -16,6 +16,7 @@ import { sync, check, plan, context } from '../src/sync.mjs'
 import { lint } from '../src/lint.mjs'
 import { render } from '../src/render.mjs'
 import { discover, hints } from '../src/discover.mjs'
+import { hookScript } from '../src/hook.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PKG = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8'))
@@ -89,11 +90,7 @@ function installHook(root, config) {
     process.exit(1)
   }
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(
-    file,
-    `#!/bin/sh\n# compass: block a commit while the orientation store has errors\n${config.lintCommand} || { echo "Compass lint failed: fix the store, or run compass sync"; exit 1; }\n`,
-    { mode: 0o755 },
-  )
+  writeFileSync(file, hookScript(config.lintCommand), { mode: 0o755 })
   console.log(`  hook    ${relative(root, file).replace(/\\/g, '/')} — commits are blocked while the lint has errors`)
 }
 

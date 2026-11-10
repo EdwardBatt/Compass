@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { execFileSync } from 'node:child_process'
@@ -9,6 +9,7 @@ import { loadConfig, findRoot } from '../src/config.mjs'
 import { lint, slug } from '../src/lint.mjs'
 import { sync, check } from '../src/sync.mjs'
 import { render } from '../src/render.mjs'
+import { hookScript } from '../src/hook.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'compass.mjs')
 
@@ -297,6 +298,41 @@ test('init --ci writes the workflow and --hook installs the pre-commit hook', ()
   assert.match(read(root, '.github/workflows/compass.yml'), /compass\.mjs lint/)
   assert.match(read(root, '.git/hooks/pre-commit'), /compass/)
   rmSync(root, { recursive: true, force: true })
+})
+
+test('the hook routes npx and npm through node when npm sits next to it, then runs the lint command', () => {
+  const script = hookScript('npx --yes github:EdwardBatt/Compass#v0.3.0 lint')
+  assert.match(script, /\[ -f "\$d\/npx-cli\.js" \]/)
+  assert.match(script, /npx\(\) \{ "\$n" "\$d\/npx-cli\.js" "\$@"; \}/)
+  assert.match(script, /npm\(\) \{ "\$n" "\$d\/npm-cli\.js" "\$@"; \}/)
+  assert.match(script, /\nnpx --yes github:EdwardBatt\/Compass#v0\.3\.0 lint \|\| /)
+})
+
+// On Windows, npx is a bash script, and GitHub Desktop's Git has no bash, so running it fails. A fake
+// layout stands in: a broken npx on the PATH, and a node with npm's entry points beside it.
+test('the hook runs npx through node in the Windows layout, and plain npx elsewhere', { skip: process.platform === 'win32' && 'needs a POSIX /bin/sh' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'compass-hook-'))
+  const log = join(dir, 'calls.log')
+  const exe = (rel, body) => { write(dir, rel, `#!/bin/sh\n${body}\n`); chmodSync(join(dir, rel), 0o755) }
+  exe('win/node', `echo "node $*" >> "${log}"`)
+  write(dir, 'win/node_modules/npm/bin/npx-cli.js', '')
+  write(dir, 'win/node_modules/npm/bin/npm-cli.js', '')
+  exe('broken/npx', 'exit 99')
+  exe('unix/node', 'exit 0')
+  exe('unix/npx', `echo "npx $*" >> "${log}"`)
+  write(dir, 'pre-commit', hookScript('npx --yes compass lint'))
+  const run = (path) => execFileSync('/bin/sh', [join(dir, 'pre-commit')], { env: { PATH: `${path}:/usr/bin:/bin` }, stdio: 'pipe' })
+
+  run(`${join(dir, 'win')}:${join(dir, 'broken')}`)
+  assert.match(read(dir, 'calls.log'), /^node .*npx-cli\.js --yes compass lint$/m)
+
+  run(join(dir, 'unix'))
+  assert.match(read(dir, 'calls.log'), /^npx --yes compass lint$/m)
+
+  write(dir, 'pre-commit', hookScript('npx false'))
+  exe('unix/npx', 'exit 1')
+  assert.throws(() => run(join(dir, 'unix')))
+  rmSync(dir, { recursive: true, force: true })
 })
 
 test('a path that is neither a string nor false is a config error', () => {
