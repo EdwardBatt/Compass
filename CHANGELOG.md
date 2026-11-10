@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 — 2026-11-10
+
+Commits from GitHub Desktop on Windows.
 
 - **Fix: the pre-commit hook under GitHub Desktop on Windows.** On Windows, `npx` and `npm` are bash scripts. GitHub Desktop runs hooks with a Git that has no bash, so the script started the next bash on the PATH, usually WSL's, which cannot see Windows paths: every commit failed with `/bin/bash: C:/.../npx: No such file or directory`. When npm's entry points sit next to `node`, the hook now runs `npx` and `npm` through `node` directly. Elsewhere it uses them as before. Run `compass hook` again to update an installed hook.
+- **Upgrade note.** Set `"pin": "v0.3.1"` (and the tag in any `lintCommand` or npm script), then run `npx --yes github:EdwardBatt/Compass#v0.3.1 sync` and `compass hook`. With `ci` on, the workflow file changes.
 
 ## 0.3.0 — 2026-11-09
 

@@ -27,7 +27,7 @@ No database, no plugin, no dependencies: Node 18.17+ and git.
 You need Node 18.17 or later and a git repository (run `git init` first in a new folder; the staleness checks and the hook read git). Then, in the repository:
 
 ```bash
-npx --yes github:EdwardBatt/Compass#v0.3.0 init --tools claude,cursor,gemini,antigravity,agents --ci --hook
+npx --yes github:EdwardBatt/Compass#v0.3.1 init --tools claude,cursor,gemini,antigravity,agents --ci --hook
 ```
 
 `init`:
@@ -158,7 +158,7 @@ All of them accept `--root <dir>`. Otherwise the root is the nearest folder hold
   "ownerCommits": true,            // close ends with "do not commit; Sam does"
   "store": "docs/compass",
   "tools": ["claude", "cursor", "gemini", "antigravity", "agents"],
-  "pin": "v0.3.0",                  // the Compass version CI runs; '' = latest on main
+  "pin": "v0.3.1",                  // the Compass version CI runs; '' = latest on main
   "lintCommand": "npm run compass", // what agents are told to run; unset = npx at the pinned version
   "ci": true,                       // also generate .github/workflows/compass.yml
   "paths": {
