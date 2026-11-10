@@ -9,6 +9,7 @@ import { loadConfig, findRoot } from '../src/config.mjs'
 import { lint, slug } from '../src/lint.mjs'
 import { sync, check } from '../src/sync.mjs'
 import { render } from '../src/render.mjs'
+import { hookScript } from '../src/hook.mjs'
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'compass.mjs')
 
@@ -297,6 +298,24 @@ test('init --ci writes the workflow and --hook installs the pre-commit hook', ()
   assert.match(read(root, '.github/workflows/compass.yml'), /compass\.mjs lint/)
   assert.match(read(root, '.git/hooks/pre-commit'), /compass/)
   rmSync(root, { recursive: true, force: true })
+})
+
+test('the hook falls back to the system bin folders when its tool does not resolve', () => {
+  const script = hookScript('npx --yes github:EdwardBatt/Compass#v0.3.0 lint')
+  assert.match(script, /command -v npx\)"; \[ -n "\$t" \] && \[ -x "\$t" \] \|\| PATH="\/usr\/local\/bin:\/usr\/bin:\/bin:\$PATH"/)
+  assert.match(script, /\nnpx --yes github:EdwardBatt\/Compass#v0\.3\.0 lint \|\| /)
+  assert.match(hookScript('npm run compass'), /command -v npm\)/)
+})
+
+// GitHub Desktop on Windows can run hooks in WSL with the Windows PATH, so the lint's tool is not
+// found. Reproduce that with a PATH that holds nothing: the hook must recover and run the command.
+test('the hook still runs its command when the PATH cannot find the tool', { skip: process.platform === 'win32' && 'needs a POSIX /bin/sh' }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'compass-hook-'))
+  write(dir, 'pre-commit', hookScript('env true'))
+  execFileSync('/bin/sh', [join(dir, 'pre-commit')], { env: { PATH: '/nonexistent:c:/nvm4w/nodejs' }, stdio: 'pipe' })
+  write(dir, 'pre-commit', hookScript('env false'))
+  assert.throws(() => execFileSync('/bin/sh', [join(dir, 'pre-commit')], { env: { PATH: '/nonexistent' }, stdio: 'pipe' }))
+  rmSync(dir, { recursive: true, force: true })
 })
 
 test('a path that is neither a string nor false is a config error', () => {
