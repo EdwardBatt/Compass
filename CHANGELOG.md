@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+Team mode: several people, one repository, and no two branches editing the same lines.
+
+- **`"team": true`** (or `init --team`). The procedures speak to whoever is running the agent, read from git at run time, instead of to the owner. Decision records go to a new `approvers` list (empty means the owner). Work in progress lives in per-person session notes named `YYYY-MM-DD-<who>-<topic>.md`, carrying `author:` and `branch:`, and nobody edits a teammate's note. Start with no task lists teammates' in-flight work separately, so two people don't pick up the same thing.
+- **One file per entry.** What several people add to is a folder: `state/<item>.md` replaces `STATE.md` (with `state:` and, when waiting, `waiting_on:`); `traps/<symptom>.md` replaces entries in `traps.md`, and the folder listing is the index; each person appends to their own `trajectories/<who>.md`. `MAP.md` stays one file, with rows kept in alphabetical order, and adding a row no longer bumps its `verified:`. Parallel branches therefore add different files, which every forge merges cleanly. **No merge drivers**: GitHub, GitLab and Bitbucket ignore `merge=union` when merging a pull request, so team mode never relies on one. Tested with plain git merges, which behave as a pull request merge does.
+- **Trajectory logs.** Every close appends the session's trajectory, as one line with a `by:` field, to its author's log. Close appends without reading the file, and nothing but `compass report` reads it, so it costs a session the same whatever its size. The lint suggests archiving a log past 12,000 characters; the report reads archived logs too and counts an entry once even when a session note repeats it. A log entry's paths are history and are not checked.
+- **Shared hook.** In team mode the pre-commit hook is generated into `.githooks/pre-commit` (committed, LF-only, drift-checked), and `compass hook` points `core.hooksPath` at it. It refuses to take over another tool's `hooksPath`, or to switch while `.git/hooks` holds hooks that would stop running. `doctor` and start say when a clone has not run it.
+- **`compass lint --base <ref>`.** Errors stay project-wide; warnings cover only what the branch changed. New check: a note whose source the branch changed while leaving the note alone. In team mode, the generated CI uses it on pull requests.
+- **`compass report`.** Gathers every trajectory: tasks the map could not route, what they missed (counted), capsules loaded and never loaded, in-flight work by person (asking about notes whose branch is merged or gone), what is waiting on whom, and stale notes by owner. `--json` too.
+- **Owners.** `owners: [name]` in a note's front matter; every problem the lint reports about that note names them.
+- **Lint.** In every mode: a front-matter key given twice, or two `MAP.md` rows for one task, is an error, because that is what a careless merge leaves behind. `origin: human:<name>` is valid. In a team store: state items, trap files and logs are checked for their type and shape, a trap file must be named as its heading, two state files may not describe one item, the state folder is checked against the plan as `STATE.md` is, a session note with no `author:` is an error, and one named by date alone is a warning.
+- **Fix: `sources:` written as a YAML list** (`- path` lines, as the example store does) was read as empty, so those sources were never checked. Projects that use that form may see new, correct errors for sources that no longer exist.
+- **Solo projects are unchanged.** With `team` off, every generated file is byte-for-byte what 0.3.1 writes, so upgrading causes no drift.
+
 ## 0.3.1 — 2026-11-10
 
 Commits from GitHub Desktop on Windows.

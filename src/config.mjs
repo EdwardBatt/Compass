@@ -17,6 +17,12 @@ export const DEFAULTS = {
   version: 1,
   project: 'this project',
   owner: 'the project owner',
+  // true: several people work on this repository at once. The procedures then speak to whoever is
+  // running the agent (read from git at run time), keep in-flight work in per-person session notes
+  // instead of STATE.md, and send decisions to `approvers`. Solo output is unchanged.
+  team: false,
+  // Team mode: who accepts decision records. Empty: the owner.
+  approvers: [],
   // true: agents never commit; the close routine ends by handing the owner the commit text.
   ownerCommits: false,
   store: 'docs/compass',
@@ -43,6 +49,8 @@ export const DEFAULTS = {
     antigravity: '.agent/rules/compass.md',
     agents: 'AGENTS.md',
     ci: '.github/workflows/compass.yml',
+    // Team mode: the committed hooks folder `compass hook` points git's core.hooksPath at.
+    hooks: '.githooks',
   },
   caps: {
     capsuleLines: 60, // a capsule points at source, it does not reproduce it
@@ -52,6 +60,7 @@ export const DEFAULTS = {
     mapRowChars: 1200, // a MAP row longer than this has become a capsule without the name
     trapsIndexChars: 6000, // the traps index is read whole; the entries are not
     fileChars: { 'README.md': 8000, 'MAP.md': 12000, 'STATE.md': 16000 },
+    logChars: 12000, // a trajectory log (team mode) past this is archived; nobody reads it whole
   },
   // Backticked path prefixes the lint must not resolve (generated, external or illustrative paths).
   ignorePaths: [],
@@ -125,6 +134,10 @@ export function validate(config, root) {
   }
   if (typeof config.pin !== 'string' || !/^[\w.\/-]*$/.test(config.pin)) {
     errors.push(`${CONFIG_FILE}: pin must be a Compass tag such as "v0.3.0", or '' for the latest (got ${JSON.stringify(config.pin)})`)
+  }
+  if (typeof config.team !== 'boolean') errors.push(`${CONFIG_FILE}: team must be true or false`)
+  if (!Array.isArray(config.approvers) || config.approvers.some((a) => typeof a !== 'string' || !a.trim())) {
+    errors.push(`${CONFIG_FILE}: approvers must be a list of names`)
   }
   if (!Array.isArray(config.authority)) errors.push(`${CONFIG_FILE}: authority must be a list of Markdown lines`)
   if (!Array.isArray(config.paths?.rules)) errors.push(`${CONFIG_FILE}: paths.rules must be a list`)

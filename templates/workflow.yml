@@ -19,4 +19,8 @@ jobs:
 {{/if}}      - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node .compass-tool/bin/compass.mjs lint
+{{#if team}}      # On a pull request, warnings cover only what it changed; errors are always project-wide.
+      - if: github.event_name == 'pull_request'
+        run: node .compass-tool/bin/compass.mjs lint --base origin/${{ github.base_ref }}
+      - if: github.event_name != 'pull_request'
+        run: node .compass-tool/bin/compass.mjs lint{{else}}      - run: node .compass-tool/bin/compass.mjs lint{{/if}}
