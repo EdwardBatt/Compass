@@ -2,7 +2,7 @@
 
 **Shared project memory for AI coding agents, with a lint that keeps it honest.**
 
-![Compass in 40 seconds: init sets up every tool, a hand edit to the generated rules fails the lint, sync restores them](docs/CompassDemo.gif)
+![Compass in 40 seconds: init sets up every tool, a hand edit to the generated rules fails the lint, sync restores them](docs/CompassSoloDemo.gif)
 
 AI coding agents start every session knowing nothing about your project. They either read too much (slow, expensive, distracted) or too little (confident and wrong). Notes written to help them go stale silently, and each tool keeps its own copy of the rules.
 
@@ -228,6 +228,8 @@ To change a procedure, change the config, or change Compass and run `sync` in ea
 
 ## Working as a team
 
+![Team mode in 45 seconds: Alice and Bob each finish work on their own branch, the branches merge with no conflicts, the lint is clean, and the report shows what is waiting on Edward](docs/CompassTeamDemo.gif)
+
 By default Compass assumes one person at a time: the procedures speak to the owner, and `STATE.md` carries what is in flight. On a shared repository that breaks. Every branch edits the same lines of `STATE.md` and `traps.md`, two people on the same day write the same session note, and "Waiting on Sam" stops meaning anything. Turn on team mode:
 
 ```bash
@@ -308,7 +310,8 @@ Until step 3, the lint reports the generated files as drift. That is intended: i
 
 ```bash
 npm test     # node:test, no dependencies; CI runs it on Linux, Windows and macOS, Node 18–22
-pwsh -File scripts/demo.ps1   # replays the README demo in a temp folder, for re-recording docs/CompassDemo.gif
+pwsh -File scripts/demo.ps1         # replays the solo demo in a temp folder, for re-recording docs/CompassSoloDemo.gif
+pwsh -File scripts/demo.ps1 -Team   # the team demo, for docs/CompassTeamDemo.gif
 ```
 
 See [CHANGELOG.md](CHANGELOG.md).

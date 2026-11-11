@@ -2,6 +2,7 @@
 #
 #   pwsh -File scripts/demo.ps1            # uses the latest tag in this repo's package.json
 #   pwsh -File scripts/demo.ps1 -Pin v0.3.0
+#   pwsh -File scripts/demo.ps1 -Team      # the team demo: two branches, a clean merge, the report
 #
 # Before recording: a terminal about 100 x 28 characters, font 16-18 pt, dark theme.
 # Start the recorder when the screen clears; stop it after the last line.
@@ -9,7 +10,8 @@ param(
   [string]$Pin = 'v' + (Get-Content (Join-Path $PSScriptRoot '..\package.json') -Raw | ConvertFrom-Json).version,
   [int]$TypeMs = 45,   # per character
   [int]$PauseMs = 1600, # after each command's output
-  [switch]$NoWait     # skip the Enter prompt (for a dry run)
+  [switch]$NoWait,    # skip the Enter prompt (for a dry run)
+  [switch]$Team       # record the team demo instead of the solo one
 )
 $ErrorActionPreference = 'Continue'
 # Compass prints UTF-8 (em dashes, arrows). Without this, PowerShell decodes it with the console's
@@ -61,6 +63,62 @@ function Run([string]$shown, [scriptblock]$action) {
 if (-not $NoWait) { Read-Host 'Ready. Press Enter, then start recording' | Out-Null }
 Clear-Host
 Start-Sleep -Milliseconds 800
+
+if ($Team) {
+  # What each person's close would write on their branch: a state item and one trajectory line.
+  # Written here off camera, so the recording shows the merge and the store, not file editing.
+  function Note([string]$path, [string]$text) {
+    New-Item -ItemType Directory -Force (Split-Path $path) | Out-Null
+    [IO.File]::WriteAllText((Join-Path $dir $path), $text)
+  }
+  $today = Get-Date -Format 'yyyy-MM-dd'
+  $fm = "---`ntype: state`nstatus: current`norigin: ai-derived`nverified: $today`n"
+  $log = "---`ntype: log`nstatus: current`norigin: ai-derived`nverified: $today`nsources: []`n---`n`n"
+  function Branch([string]$who, [string]$branch, [scriptblock]$write) {
+    git switch -q main 2>$null
+    git switch -q -c $branch 2>$null
+    git config user.name $who
+    & $write
+    git add -A 2>$null
+    git -c core.hooksPath= commit -qm "$who`: $branch" 2>$null
+  }
+
+  Show '# a team project: one command sets up shared memory for every AI tool' -Comment
+  Run "npx github:EdwardBatt/Compass#$Pin init --team --tools claude,cursor,agents --hook" {
+    npx --yes $spec init --team --owner Edward --tools claude,cursor,agents --hook 2>&1 | Paint
+  }
+  # The project's README paragraph, written off camera, so the lint shows clean rather than a placeholder.
+  $readme = Join-Path $dir 'docs/compass/README.md'
+  $text = [IO.File]::ReadAllText($readme) -replace '<!-- compass:todo[^>]*-->\r?\n[^\n]*\n', "Tally is a small task tracker, built by a team of three.`n"
+  [IO.File]::WriteAllText($readme, $text)
+  git add -A 2>$null
+  git -c core.hooksPath= commit -qm 'Compass, team mode' 2>$null
+  git branch -q -M main 2>$null
+
+  Show '# Alice and Bob each finish work on their own branch, the same afternoon' -Comment
+  Branch 'Alice' 'alice/due-dates' {
+    Note 'docs/compass/state/due-dates.md' "$fm`state: working`nsources: []`n---`n`n# Due dates`n`nTasks take a due date; overdue ones list first.`n"
+    Note 'docs/compass/trajectories/alice.md' "$log# Trajectories — Alice`n`n- trajectory: $today — add due dates | by: Alice | capsule: none — no row in MAP.md matched | missed: the task list`n"
+  }
+  Branch 'Bob' 'bob/tags' {
+    Note 'docs/compass/state/tags.md' "$fm`state: waiting`nwaiting_on: Edward`nsources: []`n---`n`n# Tags`n`nBuilt behind a flag. Free-form tags or a fixed list? Edward decides.`n"
+    Note 'docs/compass/trajectories/bob.md' "$log# Trajectories — Bob`n`n- trajectory: $today — add tags | by: Bob | capsule: none — no row in MAP.md matched | missed: the task list`n"
+  }
+  git switch -q main 2>$null
+  git config user.name 'Edward'
+  Start-Sleep -Milliseconds 400
+  Run 'git merge alice/due-dates bob/tags' { git merge --no-edit alice/due-dates bob/tags 2>&1 | Paint }
+
+  Show '# no conflicts: each item, note and log is its own file' -Comment
+  Show "# (from here, compass = npx github:EdwardBatt/Compass#$Pin)" -Comment
+  Run 'compass lint' { compass lint }
+  Run 'compass report' { compass report }
+
+  Start-Sleep -Milliseconds 1500
+  Set-Location $HOME
+  Remove-Item -Recurse -Force $dir
+  return
+}
 
 Show '# a new project: one command sets up memory for every AI tool' -Comment
 Run "npx github:EdwardBatt/Compass#$Pin init --tools claude,cursor,agents --ci --hook" {
