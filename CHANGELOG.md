@@ -13,7 +13,7 @@ Team mode: several people, one repository, and no two branches editing the same 
 - **Owners.** `owners: [name]` in a note's front matter; every problem the lint reports about that note names them.
 - **Lint.** In every mode: a front-matter key given twice, or two `MAP.md` rows for one task, is an error, because that is what a careless merge leaves behind. `origin: human:<name>` is valid. In a team store: state items, trap files and logs are checked for their type and shape, a trap file must be named as its heading, two state files may not describe one item, the state folder is checked against the plan as `STATE.md` is, a session note with no `author:` is an error, and one named by date alone is a warning.
 - **Fix: `sources:` written as a YAML list** (`- path` lines, as the example store does) was read as empty, so those sources were never checked. Projects that use that form may see new, correct errors for sources that no longer exist.
-- **Start looks beyond the capsule (every project).** A capsule is where to start, not where to stop: start now searches for what else uses the thing about to change, including existing data, examples and fixtures, and reports what must keep working. In a measured run, an agent that followed its map straight to the code it was changing missed an input format used elsewhere, which an agent exploring freely caught. This changes the start procedure for solo projects too, so after upgrading, `compass sync` rewrites it; team mode's other changes leave solo output as 0.3.1 wrote it.
+- **Solo projects are unchanged.** With `team` off, every generated file is byte-for-byte what 0.3.1 writes, so upgrading causes no drift.
 
 ## 0.3.1 — 2026-11-10
 
