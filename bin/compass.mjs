@@ -95,6 +95,17 @@ const gitOr = (root, fallback, ...args) => {
 }
 
 /**
+ * core.hooksPath for the hooks folder, relative to the repository's top level (which may sit above
+ * the root). Git says where the root is inside the repository (`--show-prefix`), so no two path
+ * spellings are compared: on Windows the same folder can be C:\Users\RUNNER~1\… or
+ * C:/Users/runneradmin/…, and path.relative() between them walks out of the repository.
+ */
+function hooksPathFor(root, dir) {
+  const prefix = git(root, 'rev-parse', '--show-prefix') // '' at the top level, else 'sub/dir/'
+  return (prefix + dir).replace(/\\/g, '/').replace(/\/$/, '')
+}
+
+/**
  * Team mode: the hook is committed in targets.hooks, and each clone points core.hooksPath at it.
  * Moving hooksPath silently disables every hook in .git/hooks, so it refuses while one exists that
  * is not Compass's own, and it never takes over a hooksPath another tool (husky, lefthook) set.
@@ -110,9 +121,7 @@ function installSharedHook(root, config) {
     console.error(`compass: ${dir}/pre-commit is missing — run \`compass sync\` first`)
     process.exit(1)
   }
-  // core.hooksPath is read relative to the repository's top level, which may sit above the root.
-  const top = git(root, 'rev-parse', '--show-toplevel')
-  const want = relative(top, join(root, dir)).replace(/\\/g, '/')
+  const want = hooksPathFor(root, dir)
   const current = gitOr(root, '', 'config', '--get', 'core.hooksPath')
   if (current && current.replace(/\/$/, '') !== want) {
     console.error(`compass: core.hooksPath is already '${current}' (another hook manager?) — add \`${config.lintCommand}\` to its pre-commit by hand`)
@@ -275,7 +284,7 @@ const commands = {
       const file = join(root, hooks, 'pre-commit')
       hook = existsSync(file) && readFileSync(file, 'utf8').includes('compass') ? 'installed' : 'not installed (`compass hook`)'
       if (config.team) {
-        const want = relative(git(root, 'rev-parse', '--show-toplevel'), join(root, config.targets.hooks)).replace(/\\/g, '/')
+        const want = hooksPathFor(root, config.targets.hooks)
         const current = gitOr(root, '', 'config', '--get', 'core.hooksPath').replace(/\/$/, '')
         hook = current === want ? `installed — core.hooksPath is ${want}` : `not installed in this clone — run \`compass hook\` (core.hooksPath is ${current ? `'${current}'` : 'unset'})`
       }

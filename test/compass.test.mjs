@@ -825,3 +825,29 @@ test('trajectory logs: one per person, never checked for paths, archived when la
   rmSync(root, { recursive: true })
   rmSync(solo, { recursive: true })
 })
+
+test('compass hook gives core.hooksPath from git, whatever the spelling of the path it runs from', () => {
+  const { root, git } = teamRepo()
+  // On Windows the same folder can be reached by its 8.3 short name (C:\Users\RUNNER~1\…), as on
+  // GitHub's runners; comparing that with git's long top-level path walked out of the repository.
+  let cwd = root
+  if (process.platform === 'win32') {
+    const short = execFileSync('cmd', ['/d', '/s', '/c', `"for %A in ("${root}") do @echo %~sA"`], { encoding: 'utf8', windowsVerbatimArguments: true }).trim()
+    if (short) cwd = short
+  }
+  execFileSync(process.execPath, [BIN, 'hook'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  assert.equal(git('config', 'core.hooksPath'), '.githooks')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('compass hook in a project below the repository top level points at its own hooks folder', () => {
+  const top = mkdtempSync(join(tmpdir(), 'compass-'))
+  const git = (...a) => execFileSync('git', a, { cwd: top, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  git('init', '-q')
+  const root = join(top, 'apps', 'site')
+  mkdirSync(root, { recursive: true })
+  execFileSync(process.execPath, [BIN, 'init', '--root', root, '--project', 'Demo', '--owner', 'Sam', '--tools', 'agents', '--team'])
+  execFileSync(process.execPath, [BIN, 'hook'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  assert.equal(git('config', 'core.hooksPath'), 'apps/site/.githooks')
+  rmSync(top, { recursive: true, force: true })
+})
