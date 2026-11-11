@@ -27,7 +27,7 @@ No database, no plugin, no dependencies: Node 18.17+ and git.
 You need Node 18.17 or later and a git repository (run `git init` first in a new folder; the staleness checks and the hook read git). Then, in the repository:
 
 ```bash
-npx --yes github:EdwardBatt/Compass#v0.3.1 init --tools claude,cursor,gemini,antigravity,agents --ci --hook
+npx --yes github:EdwardBatt/Compass#v0.4.0 init --tools claude,cursor,gemini,antigravity,agents --ci --hook
 ```
 
 `init`:
@@ -88,6 +88,33 @@ The CLI sets Compass up. Day to day, two routines do the work, one at each end o
 | Before every commit | `compass lint` (or your `lintCommand`) | same | Fails on anything provably wrong in the store |
 
 Cursor, Gemini, Antigravity and `AGENTS.md` readers are pointed at the two protocol files by their generated rules, so you can ask them to "start Compass for <task>" or "close Compass".
+
+## Using it well
+
+Compass works from your project's own documents, and it carries what is said in a session from one session, and one person, to the next.
+
+**Point it at your plan, roadmap and decision records.** Set `paths.plan`, `paths.roadmap`, `paths.adr`, `paths.schema` and `paths.rules` in `compass.config.json`, then run `compass sync`. From then on:
+
+- `/compass-start` with no task proposes the next work from the earliest unfinished milestone of the plan (or the roadmap's current phase), and reads only that part
+- start names the decision records that bind the task, and whether each is accepted or only proposed
+- close ticks the plan when work is done, and keeps what is built in step with it; the lint warns when the plan moves on and the store has not
+- a decision made in a session becomes a decision record, drafted by close and accepted by the owner or approvers
+
+Keep task status in one place in the plan, such as a status section at the top, so start always reads the current picture.
+
+**Say decisions, holds and priorities in the session.** "Hold the front desk until I decide", "the limit is 20 per 10 minutes", "the widget question is mine": close records each one where the next session will find it, as a waiting item, a decision record or a note. The next agent, yours or a teammate's, starts from it.
+
+**Read start's report, then answer it.** Start tells you what it loaded, which decisions apply, what is already built, what is waiting on a person and, on a team, who is already working on it. Reply to that report: confirm, redirect, or settle what it flagged. That is the moment the memory steers the work.
+
+**End every working session with `/compass-close`.** It writes back what is durable and nothing else, and runs the lint.
+
+**On a team** (see *Working as a team*):
+
+1. Each person runs `compass hook` once in their clone
+2. Each piece of work gets its own branch
+3. Start shows what teammates have in flight, including on branches not merged yet, and whose it is
+4. Close writes your session note on your branch, and appends your line to your trajectory log
+5. Approvers settle what is waiting on them; `compass report` shows what that is, and what the map keeps missing
 
 ## The store
 
@@ -166,7 +193,7 @@ All of them accept `--root <dir>`. Otherwise the root is the nearest folder hold
   "ownerCommits": true,            // close ends with "do not commit; Sam does"
   "store": "docs/compass",
   "tools": ["claude", "cursor", "gemini", "antigravity", "agents"],
-  "pin": "v0.3.1",                  // the Compass version CI runs; '' = latest on main
+  "pin": "v0.4.0",                  // the Compass version CI runs; '' = latest on main
   "lintCommand": "npm run compass", // what agents are told to run; unset = npx at the pinned version
   "ci": true,                       // also generate .github/workflows/compass.yml
   "paths": {
@@ -204,7 +231,7 @@ To change a procedure, change the config, or change Compass and run `sync` in ea
 By default Compass assumes one person at a time: the procedures speak to the owner, and `STATE.md` carries what is in flight. On a shared repository that breaks. Every branch edits the same lines of `STATE.md` and `traps.md`, two people on the same day write the same session note, and "Waiting on Sam" stops meaning anything. Turn on team mode:
 
 ```bash
-npx --yes github:EdwardBatt/Compass#v0.3.1 init --team ...   # new project
+npx --yes github:EdwardBatt/Compass#v0.4.0 init --team ...   # new project
 # existing project: see "Switching an existing store" below
 ```
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-11
 
 Team mode: several people, one repository, and no two branches editing the same lines.
 
@@ -14,6 +14,8 @@ Team mode: several people, one repository, and no two branches editing the same 
 - **Lint.** In every mode: a front-matter key given twice, or two `MAP.md` rows for one task, is an error, because that is what a careless merge leaves behind. `origin: human:<name>` is valid. In a team store: state items, trap files and logs are checked for their type and shape, a trap file must be named as its heading, two state files may not describe one item, the state folder is checked against the plan as `STATE.md` is, a session note with no `author:` is an error, and one named by date alone is a warning.
 - **Fix: `sources:` written as a YAML list** (`- path` lines, as the example store does) was read as empty, so those sources were never checked. Projects that use that form may see new, correct errors for sources that no longer exist.
 - **Solo projects are unchanged.** With `team` off, every generated file is byte-for-byte what 0.3.1 writes, so upgrading causes no drift.
+- **Upgrade note.** Set `"pin": "v0.4.0"` (and the tag in any `lintCommand` or npm script), then run `npx --yes github:EdwardBatt/Compass#v0.4.0 sync`. Solo projects see no change in their generated files. To switch a project to team mode, follow *Working as a team* in the README: set `"team": true` and `approvers`, run `compass init` again, move `STATE.md` into `state/`, and have each teammate run `compass hook` once.
+- **README.** A new *Using it well* section: pointing Compass at the plan, roadmap and decision records, saying decisions in the session, answering start's report, and a team's working day.
 
 ## 0.3.1 — 2026-11-10
 
