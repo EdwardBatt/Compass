@@ -12,14 +12,19 @@
 //   `backticked/path`   — from the project root
 //   sources: [a, b]     — from the project root
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
-import { join, dirname, resolve, relative } from 'node:path'
+import { join, dirname, resolve, relative, basename } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { check as checkDrift } from './sync.mjs'
 import { hints } from './discover.mjs'
 
-export const TYPES = ['map', 'state', 'trap', 'capsule', 'session']
+// log: an append-only record nobody reads whole (trajectories.md, team mode); never ages, never routed.
+export const TYPES = ['map', 'state', 'trap', 'capsule', 'session', 'log']
 export const STATUSES = ['current', 'needs-check', 'superseded', 'draft']
 export const ORIGINS = ['human', 'ai-derived']
+// What a state item (team mode, state/<item>.md) can say. `absent`: described somewhere, not built.
+export const STATES = ['working', 'partial', 'absent', 'broken', 'waiting']
+// `human:<name>` says which person asserted it — on a team, whom to ask before superseding it.
+const validOrigin = (o) => ORIGINS.includes(o) || /^human:\s*\S/.test(o)
 
 // Directories the lint does not treat as notes: archive/ is out of circulation and supposed to be
 // stale; protocol/ is generated and checked for drift instead.
@@ -48,21 +53,44 @@ function walk(dir) {
   return out
 }
 
-/** Minimal YAML front-matter reader — flat scalars and [a, b] lists only, which is all a note uses. */
+/**
+ * Minimal YAML front-matter reader — flat scalars, and lists written either as [a, b] or as
+ * `- item` lines under an empty key, which is all a note uses.
+ */
 export function frontmatter(text) {
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/)
   if (!m) return null
   const out = {}
+  const dupes = []
+  let listKey = null
+  const listKeys = new Set()
   for (const line of m[1].split(/\r?\n/)) {
+    const item = line.match(/^\s+-\s+(.*?)\s*$/)
+    if (item && listKey) {
+      out[listKey].push(item[1])
+      continue
+    }
+    listKey = null
     const kv = line.match(/^([a-z_]+):\s*(.*)$/)
     if (!kv) continue
     const [, key, raw] = kv
+    if (key in out) dupes.push(key)
+    if (raw.trim() === '') {
+      // Either an empty value or the start of a `- item` list; an empty list reads as empty.
+      out[key] = []
+      listKey = key
+      listKeys.add(key)
+      continue
+    }
     out[key] =
       raw.startsWith('[') && raw.endsWith(']')
         ? raw.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean)
         : raw.trim()
   }
+  // A key with no value and no `- item` lines under it is an empty value, as before.
+  for (const [k, v] of Object.entries(out)) if (Array.isArray(v) && !v.length && listKeys.has(k)) out[k] = ''
   out.__length = m[0].split(/\r?\n/).length - 1
+  out.__dupes = dupes
   return out
 }
 
@@ -107,7 +135,7 @@ function anchorsOf(file, slugCache) {
 }
 
 /** Local calendar days between an ISO date and today. Negative means the date is in the future. */
-function daysSince(iso, today) {
+export function daysSince(iso, today) {
   const [y, m, d] = iso.split('-').map(Number)
   return Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) - Date.UTC(y, m - 1, d)) / 86_400_000)
 }
@@ -126,6 +154,23 @@ function lastCommitDate(root, rel) {
   }
 }
 
+/**
+ * The files this branch changed since it left `base`, from the project root: committed, staged,
+ * unstaged and untracked. Throws with git's message when `base` is not a ref.
+ */
+export function changedSince(root, base) {
+  const g = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  let mergeBase
+  try {
+    mergeBase = g('merge-base', base, 'HEAD').trim()
+  } catch (e) {
+    throw new Error(`cannot compare with '${base}': ${String(e.stderr || e.message).trim().split('\n')[0]} — in CI, check out with fetch-depth: 0`)
+  }
+  // --relative: paths from the project root, even when it sits below the repository's top level.
+  const lines = [...g('diff', '--name-only', '--relative', mergeBase).split('\n'), ...g('ls-files', '--others', '--exclude-standard').split('\n')]
+  return new Set(lines.map((s) => s.trim()).filter(Boolean))
+}
+
 function abstractProblem(raw, cap) {
   if (raw === undefined) return "front matter missing 'abstract' — a capsule must say what it is for"
   if (Array.isArray(raw)) return "abstract must not begin with '[' — the front-matter reader takes that for a list"
@@ -137,10 +182,16 @@ function abstractProblem(raw, cap) {
 }
 
 /**
- * Lints the store at `root` under `config`. Returns { errors, warnings, notes }.
+ * Lints the store at `root` under `config`. Returns { errors, warnings, notes, changed }.
  * `today` is injectable for tests.
+ *
+ * With `base` (a git ref), the run is scoped to this branch: errors are still reported everywhere,
+ * because a change anywhere can break a note nobody touched (a deleted file a capsule points at),
+ * but warnings are kept only for files the branch changed, so a pull request is not buried under
+ * the whole project's ageing notes. It adds one check: a note whose described files the branch
+ * changed, while leaving the note alone.
  */
-export function lint(root, config, { today = new Date(), git = true } = {}) {
+export function lint(root, config, { today = new Date(), git = true, base = null } = {}) {
   const errors = []
   const warnings = []
   const caps = config.caps
@@ -152,6 +203,9 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
   }
 
   const files = walk(storeDir)
+  const changed = base ? changedSince(root, base) : null
+  const describes = new Map() // note -> the project files it says something about
+  const owners = new Map() // note -> who answers for it
   const linkedFromMap = new Map() // capsule path (from the store) -> the abstract MAP.md claims for it
   const capsuleAbstracts = new Map()
   const ignored = (p) => config.ignorePaths.some((prefix) => p.startsWith(prefix))
@@ -186,13 +240,32 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     // A typo here is not cosmetic: `type: capsul` would silently skip every capsule check below.
     if (fm.type && !TYPES.includes(fm.type)) errors.push(`${name}: type must be one of ${TYPES.join(', ')} (got '${fm.type}')`)
     if (fm.status && !STATUSES.includes(fm.status)) errors.push(`${name}: status must be one of ${STATUSES.join(', ')} (got '${fm.status}')`)
-    if (fm.origin && !ORIGINS.includes(fm.origin)) errors.push(`${name}: origin must be one of ${ORIGINS.join(', ')} (got '${fm.origin}')`)
+    if (fm.origin && !validOrigin(fm.origin)) errors.push(`${name}: origin must be one of ${ORIGINS.join(', ')}, or human:<name> (got '${fm.origin}')`)
+    // Two `verified:` lines is what a union merge, or a careless conflict resolution, leaves behind.
+    // The reader takes the last one silently, so it is an error, not a guess.
+    for (const key of new Set(fm.__dupes)) {
+      errors.push(`${name}: front matter has '${key}' more than once — likely left by a merge; keep one (for verified, the later date)`)
+    }
+    if (config.team && fm.type === 'session') {
+      if (!fm.author) errors.push(`${name}: a session note needs 'author:' in team mode — start uses it to tell one person's work from another's`)
+      if (/^\d{4}-\d{2}-\d{2}\.md$/.test(basename(file))) {
+        warnings.push(`${name}: named by date alone — in team mode, name it YYYY-MM-DD-<who>-<topic>.md so two people on the same day never collide`)
+      }
+    }
     const validDate = fm.verified && /^\d{4}-\d{2}-\d{2}$/.test(fm.verified) && !Number.isNaN(Date.parse(fm.verified))
     if (fm.verified && !validDate) errors.push(`${name}: verified must be a YYYY-MM-DD date (got '${fm.verified}')`)
     if (isCapsule && fm.type !== 'capsule') errors.push(`${name}: a file in capsules/ must have type: capsule`)
+    if (fm.owners !== undefined && fm.owners !== '') {
+      const list = Array.isArray(fm.owners) ? fm.owners : [fm.owners]
+      if (list.length) owners.set(name, list)
+    }
+    const described = new Set()
+    if (fm.type !== 'session') describes.set(name, described)
 
     const body = text.split(/\r?\n/).slice(fm.__length ?? 0)
-    const prose = withoutFences(text)
+    // A log entry is history: a path it names may since have been deleted, rightly. Its entries are
+    // not checked; its header is.
+    const prose = fm.type === 'log' ? withoutFences(text).replace(/^\s*[-*]?\s*trajectory:.*$/gm, '') : withoutFences(text)
 
     // ---- 2. density, and the abstract that decides whether a capsule is opened at all ----
     if (fm.type === 'capsule') {
@@ -205,7 +278,10 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
       }
     }
     const capChars = caps.fileChars?.[fromStore]
-    if (capChars && text.length > capChars) {
+    if (fm.type === 'log' && text.length > caps.logChars) {
+      // Nobody reads a log whole, so this is housekeeping, not cost: past the cap, archive it.
+      warnings.push(`${name}: ${text.length} characters, cap is ${caps.logChars} — move it to archive/ under a dated name (compass report still reads it there) and start a new one with the same header`)
+    } else if (capChars && text.length > capChars) {
       warnings.push(`${name}: ${text.length} characters, cap is ${capChars} — this file is read whole; move detail into a capsule or trim what is done`)
     }
 
@@ -228,11 +304,11 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
       const t = token.trim()
       if (!looksLikePath(t) || ignored(t)) continue
       // From the root is the rule; a name inside the store (`capsules/`, `archive/`) is also fine.
-      if (![root, storeDir, dirname(file)].some((base) => existsSync(join(base, t)))) {
+      if (![root, storeDir, dirname(file)].some((dir) => existsSync(join(dir, t)))) {
         const msg = `${name}: \`${t}\` does not exist — backticked paths are read from the project root, so write them in full`
         // In MAP.md and capsules it is a routing pointer, so it is wrong; elsewhere it may be prose.
         ;(isMap || isCapsule ? errors : warnings).push(msg)
-      }
+      } else if (isCapsule && existsSync(join(root, t))) described.add(t)
     }
 
     // ---- 5. sources: concrete paths must exist, and must not have changed since the note was checked ----
@@ -243,6 +319,7 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
         errors.push(`${name}: source '${src}' does not exist`)
         continue
       }
+      described.add(src)
       // Session notes are snapshots of one day: a later change to their sources says nothing about
       // them, and the promote-or-archive warning already covers their age. STATE's link to the
       // configured plan and roadmap is checked once, in section 7, whether or not it is listed here.
@@ -289,8 +366,24 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
       for (const m of prose.matchAll(/\]\((capsules\/[^)]+)\)([^|\n]*)/g)) {
         linkedFromMap.set(m[1], m[2].replace(/^\s*—\s*/, '').trim())
       }
+      // A union merge of two branches that both touched a row keeps both copies: identical, or the
+      // same spoken task routed two ways. Either way one task now has two rows, which the map forbids.
+      let tasks = new Map()
       for (const line of prose.split('\n')) {
-        if (!line.startsWith('|') || /^\|[\s|:-]+\|?$/.test(line)) continue
+        if (!line.startsWith('|')) {
+          tasks = new Map() // a new table starts its own column
+          continue
+        }
+        if (/^\|[\s|:-]+\|?$/.test(line)) continue
+        const task = line.split('|')[1].trim().toLowerCase()
+        if (task && tasks.has(task)) {
+          errors.push(
+            tasks.get(task) === line.trim()
+              ? `${name}: row "${line.slice(2, 60).trim()}…" appears twice — likely left by a merge; delete one`
+              : `${name}: two rows for the task "${task}" — likely left by a merge of two edits to one row; keep the right one`,
+          )
+        }
+        tasks.set(task, line.trim())
         if (line.length > caps.mapRowChars) {
           warnings.push(`${name}: row "${line.slice(2, 60).trim()}…" is ${line.length} characters, cap is ${caps.mapRowChars} — the detail belongs in a capsule`)
         }
@@ -337,6 +430,55 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     }
   }
 
+  // ---- 10b. the one-file-per-entry folders a team store keeps ----
+  // No two branches should edit the same lines, and forges ignore merge drivers, so in team mode
+  // what several people add to is a folder of files: an index or a list in one file would be the
+  // line every branch edits. The folder listing is the index, so a file's name must say what it is.
+  const heading = (text) => (withoutFences(text).match(/^#\s+(.+?)\s*$/m) ?? [])[1]
+  const stateTitles = new Map()
+  for (const file of files) {
+    const fromStore = posix(relative(storeDir, file))
+    const text = readFileSync(file, 'utf8')
+    const fm = frontmatter(text)
+    if (!fm) continue
+    if (fromStore.startsWith('traps/')) {
+      if (fm.type !== 'trap') errors.push(`${rel(file)}: a file in traps/ must have type: trap`)
+      const h = heading(text)
+      const want = h ? slug(h) + '.md' : null
+      if (!h) errors.push(`${rel(file)}: a trap file needs a '#' heading worded as its symptom`)
+      else if (fromStore.slice('traps/'.length) !== want) {
+        errors.push(`${rel(file)}: named '${fromStore.slice('traps/'.length)}', but its heading makes it '${want}' — the file name is the index, so it must be the symptom`)
+      }
+    }
+    if (fromStore.startsWith('state/')) {
+      if (fm.type !== 'state') errors.push(`${rel(file)}: a file in state/ must have type: state`)
+      if (!STATES.includes(fm.state)) errors.push(`${rel(file)}: 'state:' must be one of ${STATES.join(', ')} (got '${fm.state ?? ''}')`)
+      if (fm.state === 'waiting' && !fm.waiting_on) errors.push(`${rel(file)}: state: waiting needs 'waiting_on:' — the person it waits on`)
+      const h = heading(text)
+      if (!h) errors.push(`${rel(file)}: a state item needs a '#' heading naming the item`)
+      else if (stateTitles.has(h.toLowerCase())) {
+        errors.push(`${rel(file)}: describes '${h}', and so does ${stateTitles.get(h.toLowerCase())} — one item, one file`)
+      } else stateTitles.set(h.toLowerCase(), rel(file))
+    }
+    if (fromStore.startsWith('trajectories/') && fm.type !== 'log') errors.push(`${rel(file)}: a file in trajectories/ must have type: log`)
+  }
+
+  // ---- 10c. the state folder against the plan, like STATE.md in section 7 ----
+  const stateFiles = files.filter((f) => posix(relative(storeDir, f)).startsWith('state/'))
+  if (stateFiles.length) {
+    const newest = stateFiles
+      .map((f) => frontmatter(readFileSync(f, 'utf8'))?.verified)
+      .filter((v) => /^\d{4}-\d{2}-\d{2}$/.test(v ?? ''))
+      .sort()
+      .at(-1)
+    for (const [label, p] of newest ? planTracked : []) {
+      const changed = commitDate(p)
+      if (changed && changed > newest) {
+        warnings.push(`${config.store}/state/: the ${label} (\`${p}\`) changed on ${changed}, after any state item was verified (newest ${newest}) — check the items still agree with it`)
+      }
+    }
+  }
+
   // ---- 11. orphans: a capsule the map never routes to will never be read ----
   for (const file of files) {
     const fromStore = posix(relative(storeDir, file))
@@ -355,6 +497,31 @@ export function lint(root, config, { today = new Date(), git = true } = {}) {
     warnings.push(`compass.config.json: found \`${h.path}\` — if it holds this project's ${h.label}, set paths.${h.key} to it and run \`compass sync\` (or set it to false)`)
   }
 
-  return { errors, warnings, notes: files.length }
+  // ---- 14. this branch only: what it changed, and what it changed underneath a note ----
+  let kept = warnings
+  if (changed) {
+    const pathOf = (msg) => msg.slice(0, msg.indexOf(':'))
+    kept = warnings.filter((w) => changed.has(pathOf(w)))
+    const hit = (p) => {
+      const q = p.replace(/\/$/, '')
+      return [...changed].filter((c) => c === q || c.startsWith(q + '/'))
+    }
+    for (const [note, paths] of describes) {
+      if (changed.has(note)) continue
+      const under = [...new Set([...paths].flatMap(hit))]
+      if (under.length) {
+        const list = under.slice(0, 3).map((p) => '`' + p + '`').join(', ') + (under.length > 3 ? ` and ${under.length - 3} more` : '')
+        kept.push(`${note}: this branch changes ${list}, which this note describes, but not the note — check it still holds, then set verified`)
+      }
+    }
+  }
+
+  // ---- 15. whose it is: a problem with an owner gets fixed, an anonymous one gets ignored ----
+  const withOwner = (msg) => {
+    const who = owners.get(msg.slice(0, msg.indexOf(':')))
+    return who ? `${msg} (owners: ${who.join(', ')})` : msg
+  }
+
+  return { errors: errors.map(withOwner), warnings: kept.map(withOwner), notes: files.length, changed: changed ? changed.size : null }
 }
 

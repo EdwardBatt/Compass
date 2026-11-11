@@ -7,7 +7,7 @@ alwaysApply: true
 
 # Compass — shared project orientation
 
-Read `{{store}}/README.md` and `{{store}}/MAP.md` before touching an unfamiliar area. The map routes a task to one capsule and the source files that matter; do not read the whole folder. `{{store}}/STATE.md` says what is actually built.
+Read `{{store}}/README.md` and `{{store}}/MAP.md` before touching an unfamiliar area. The map routes a task to one capsule and the source files that matter; do not read the whole folder. {{#if team}}`{{store}}/state/` says what is actually built, one file per item.{{else}}`{{store}}/STATE.md` says what is actually built.{{/if}}
 
 The steps are in `{{store}}/protocol/start.md` (orient) and `{{store}}/protocol/close.md` (write back). Most sessions write nothing back.
 

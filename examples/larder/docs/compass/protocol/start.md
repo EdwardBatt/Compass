@@ -25,11 +25,13 @@ Follow the tiered protocol. Stop as soon as you have enough — do not read the 
 1. Read `docs/compass/STATE.md` if the task depends on whether something is already built. Plans describe more than is built, so this is usually worth the read.
 1. Read `docs/compass/traps.md` if the task involves debugging, deployment, or something that "should work" — **its index first, then only the entries whose symptom could be yours.** The index lines are worded as symptoms, so match against what you are looking at.
 1. Open the source files the capsule named. **They win over any note.**
+1. **The capsule is where to start, not where to stop.** Before you change something, search for what else uses it — its callers, and the existing files, data, examples and fixtures it reads — and open the ones your change could break. A change that works for the case in front of you can break an input the capsule never mentioned.
 
 Then report back, briefly:
 
 - which capsule you loaded, and why that one;
 - the source files you will need, and anything the capsule says is a known problem in them;
+- what else uses what you will change, found by searching beyond the capsule, and anything there your change must keep working;
 - the decisions in `docs/adr/` that bind this work, by number, and whether any is only proposed or has been superseded;
 - anything in `STATE.md` saying this is already built, partly built, or waiting on a decision;
 - any trap that applies;

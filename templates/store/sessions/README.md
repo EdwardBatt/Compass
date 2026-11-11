@@ -14,15 +14,15 @@ A note written to record that a session happened is landfill. The test: would so
 
 ## Format
 
-`YYYY-MM-DD.md`, front matter `type: session`, and these headings — omit any that would be empty:
+{{#if team}}`YYYY-MM-DD-<who>-<topic>.md` — `<who>` from `git config user.name`, lowercased with hyphens — so two people writing on the same day never collide. Front matter `type: session`, `author:` (the `git config user.name`) and `branch:` (the branch the work is on); start uses them to tell your notes from a teammate's, and the lint fails a session note with no author. **Never edit a teammate's note.** Then these headings{{else}}`YYYY-MM-DD.md`, front matter `type: session`, and these headings{{/if}} — omit any that would be empty:
 
 - **Changed** — what shipped, with plan references
 - **Why** — what prompted it, if not obvious from the plan
-- **Discovered** — one line per trap, linking to `traps.md` where the detail now lives
+- **Discovered** — one line per trap, linking to `{{trapsFile}}` where the detail now lives
 - **Decided** — one line per decision, linking to the decision record where it now lives
 - **Unresolved** — what is waiting on a person
 - **In flight** — what is half-done, and where the next session should start
-- **Loaded** — the trajectory block (below)
+{{#if team}}- **Loaded** — nothing: in team mode the trajectory goes to your own log, `trajectories/<who>.md`, appended at every close{{else}}- **Loaded** — the trajectory block (below){{/if}}
 
 ## The trajectory block
 
